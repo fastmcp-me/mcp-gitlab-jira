@@ -8,7 +8,7 @@ import {
   Tool,
   CallToolRequest,
 } from '@modelcontextprotocol/sdk/types.js';
-import { GitLabOnPremMcp } from './gitlabOnPremMcp.js';
+import { GitLabService } from './gitlab.service.js';
 import { GitLabConfig } from './gitlab.js';
 
 // Load GitLab configuration from environment variables
@@ -25,7 +25,7 @@ const gitlabConfig: GitLabConfig = {
   accessToken: gitlabAccessToken,
 };
 
-const gitlabMcp = new GitLabOnPremMcp(gitlabConfig);
+const gitlabMcp = new GitLabService(gitlabConfig);
 
 // Create the MCP server
 const server = new Server(

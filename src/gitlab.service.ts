@@ -8,7 +8,7 @@ import {
   ParsedHunk,
 } from "./gitlab.js";
 
-export class GitLabOnPremMcp {
+export class GitLabService {
   private readonly config: GitLabConfig;
 
   constructor(config: GitLabConfig) {
