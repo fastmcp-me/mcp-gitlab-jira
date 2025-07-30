@@ -47,16 +47,12 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        projectId: {
-          type: 'number',
-          description: 'The ID of the GitLab project.',
-        },
-        mrIid: {
-          type: 'number',
-          description: 'The IID (internal ID) of the Merge Request.',
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of the GitLab Merge Request.',
         },
       },
-      required: ['projectId', 'mrIid'],
+      required: ['mrUrl'],
     },
   },
   {
@@ -65,13 +61,9 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        projectId: {
-          type: 'number',
-          description: 'The ID of the GitLab project.',
-        },
-        mrIid: {
-          type: 'number',
-          description: 'The IID (internal ID) of the Merge Request.',
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of the GitLab Merge Request.',
         },
         commentBody: {
           type: 'string',
@@ -96,7 +88,7 @@ const tools: Tool[] = [
           },
         },
       },
-      required: ['projectId', 'mrIid', 'commentBody'],
+      required: ['mrUrl', 'commentBody'],
     },
   },
   {
@@ -113,12 +105,12 @@ const tools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {
-        projectId: {
-          type: 'number',
-          description: 'The ID of the GitLab project.',
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project (e.g., "namespace/project-name").',
         },
       },
-      required: ['projectId'],
+      required: ['projectPath'],
     },
   },
 ];
@@ -135,8 +127,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   try {
     switch (name) {
       case 'get_merge_request_details': {
-        const { projectId, mrIid } = args as { projectId: number; mrIid: number };
-        const result = await gitlabMcp.getMergeRequestDetails(projectId, mrIid);
+        const { mrUrl } = args as { mrUrl: string };
+        const result = await gitlabMcp.getMergeRequestDetailsFromUrl(mrUrl);
         return {
           content: [
             {
@@ -148,18 +140,16 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'add_comment_to_merge_request': {
-        const { projectId, mrIid, commentBody, discussionId, position } = args as {
-          projectId: number;
-          mrIid: number;
+        const { mrUrl, commentBody, discussionId, position } = args as {
+          mrUrl: string;
           commentBody: string;
           discussionId?: string;
           position?: any;
         };
-        const result = await gitlabMcp.addCommentToMergeRequest(
-          projectId,
-          mrIid,
-          discussionId,
+        const result = await gitlabMcp.addCommentToMergeRequestFromUrl(
+          mrUrl,
           commentBody,
+          discussionId,
           position
         );
         return {
@@ -185,8 +175,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       }
 
       case 'list_merge_requests': {
-        const { projectId } = args as { projectId: number };
-        const result = await gitlabMcp.listMergeRequests(projectId);
+        const { projectPath } = args as { projectPath: string };
+        const result = await gitlabMcp.listMergeRequests(projectPath);
         return {
           content: [
             {

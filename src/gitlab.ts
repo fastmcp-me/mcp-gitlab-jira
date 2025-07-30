@@ -138,3 +138,24 @@ export interface GitLabMergeRequest {
   web_url: string;
   project_name?: string;
 }
+
+export function parseGitLabMergeRequestUrl(url: string): { projectId: number; mrIid: number } {
+  const match = url.match(/\/(?<projectId>[^/]+)\/(?:-\/)?merge_requests\/(?<mrIid>\d+)$/);
+  if (!match || !match.groups) {
+    throw new Error(`Invalid GitLab Merge Request URL: ${url}`);
+  }
+
+  // For self-managed instances, the projectId can be a path (e.g., group/subgroup/project)
+  // We need to convert this path to a project ID. This will be handled by the gitlabOnPremMcp.ts
+  // For now, we'll just return the path as projectId and the mrIid.
+  // The actual project ID resolution will happen in gitlabOnPremMcp.ts
+  const projectId = match.groups.projectId;
+  const mrIid = parseInt(match.groups.mrIid, 10);
+
+  if (isNaN(mrIid)) {
+    throw new Error(`Could not parse MR IID from URL: ${url}`);
+  }
+
+  // Return projectId as string for now, it will be resolved to number in gitlabOnPremMcp.ts
+  return { projectId: projectId as any, mrIid };
+}

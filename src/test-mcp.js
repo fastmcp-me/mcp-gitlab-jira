@@ -10,7 +10,7 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const serverPath = join(__dirname, 'dist', 'index.js');
+const serverPath = join(dirname(__dirname), 'dist', 'index.js');
 
 // Default environment variables for testing
 const env = {

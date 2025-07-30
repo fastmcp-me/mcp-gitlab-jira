@@ -1,6 +1,6 @@
 {
-  "name": "mcp-gitlab",
-  "version": "1.0.0",
+  "name": "mcp-gitlab-on-prem",
+  "version": "0.1.0",
   "type": "module",
   "description": "GitLab On-Prem MCP Server",
   "main": "dist/index.js",
@@ -8,7 +8,7 @@
     "mcp-gitlab": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p src",
     "start": "node dist/index.js"
   },
   "keywords": ["mcp", "gitlab", "model-context-protocol"],
