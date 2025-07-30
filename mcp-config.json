@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "gitlab-mcp": {
+    "gitlab-on-prem-mcp": {
       "command": "mcp-gitlab",
       "env": {
         "GITLAB_URL": "YOUR_GITLAB_URL_HERE",
