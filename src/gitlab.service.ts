@@ -416,4 +416,10 @@ export class GitLabService {
       project.name_with_namespace.toLowerCase().includes(lowerCaseProjectName)
     );
   }
+
+  // New tool: Get Releases for a Project
+  async getReleases(projectPath: string): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any[]>(`projects/${encodedProjectPath}/releases`);
+  }
 }

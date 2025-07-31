@@ -201,6 +201,20 @@ const tools: Tool[] = [
       properties: {},
     },
   },
+  {
+    name: 'get_releases',
+    description: 'Fetches releases for a given GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project (e.g., "namespace/project-name").',
+        },
+      },
+      required: ['projectPath'],
+    },
+  },
 ];
 
 // Create the MCP server
@@ -366,6 +380,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'list_all_projects': {
         const result = await gitlabMcp.listProjects();
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_releases': {
+        const { projectPath } = args as { projectPath: string };
+        const result = await gitlabMcp.getReleases(projectPath);
         return {
           content: [
             {

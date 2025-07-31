@@ -139,6 +139,15 @@ export interface GitLabMergeRequest {
   project_name?: string;
 }
 
+export interface GitLabRelease {
+  tag_name: string;
+  name: string;
+  description: string;
+  created_at: string;
+  released_at: string;
+  // Add other relevant fields as needed
+}
+
 export interface GitLabUser {
   id: number;
   username: string;
