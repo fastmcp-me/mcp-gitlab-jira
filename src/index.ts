@@ -10,6 +10,8 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { GitLabService } from './gitlab.service.js';
 import { GitLabConfig } from './gitlab.js';
+import { JiraService } from './jira.service.js';
+import { JiraConfig } from './jira.js';
 
 // Load GitLab configuration from environment variables
 const gitlabUrl = process.env.GITLAB_URL;
@@ -27,11 +29,31 @@ const gitlabConfig: GitLabConfig = {
 
 const gitlabService = new GitLabService(gitlabConfig);
 
+// Load Jira configuration from environment variables
+const jiraApiBaseUrl = process.env.ATLASSIAN_SITE_NAME;
+const jiraUserEmail = process.env.ATLASSIAN_USER_EMAIL;
+const jiraApiToken = process.env.ATLASSIAN_API_TOKEN;
+
+if (!jiraApiBaseUrl || !jiraUserEmail || !jiraApiToken) {
+  console.error('Error: ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables must be set for Jira integration.');
+  // Do not exit here, as GitLab tools might still be usable
+}
+
+let jiraService: JiraService | undefined;
+if (jiraApiBaseUrl && jiraUserEmail && jiraApiToken) {
+  const jiraConfig: JiraConfig = {
+    apiBaseUrl: jiraApiBaseUrl,
+    userEmail: jiraUserEmail,
+    apiToken: jiraApiToken,
+  };
+  jiraService = new JiraService(jiraConfig);
+}
+
 // Create the MCP server
 // Define the tools
 const tools: Tool[] = [
   {
-    name: 'get_merge_request_details',
+    name: 'gitlab_get_merge_request_details',
     description: 'Fetches detailed information about a GitLab Merge Request, including file diffs.',
     inputSchema: {
       type: 'object',
@@ -45,7 +67,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'get_merge_request_discussions',
+    name: 'gitlab_get_merge_request_discussions',
     description: 'Fetches discussions for a GitLab Merge Request.',
     inputSchema: {
       type: 'object',
@@ -59,7 +81,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'get_file_content',
+    name: 'gitlab_get_file_content',
     description: 'Fetches the content of a specific file at a given SHA in a GitLab project.',
     inputSchema: {
       type: 'object',
@@ -81,7 +103,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'add_comment_to_merge_request',
+    name: 'gitlab_add_comment_to_merge_request',
     description: 'Adds a comment to a GitLab Merge Request. Can be a general comment, a reply to an existing discussion, or an inline comment on a specific line.',
     inputSchema: {
       type: 'object',
@@ -117,7 +139,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'list_merge_requests',
+    name: 'gitlab_list_merge_requests',
     description: 'Lists merge requests for a given GitLab project.',
     inputSchema: {
       type: 'object',
@@ -131,7 +153,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'assign_reviewers_to_merge_request',
+    name: 'gitlab_assign_reviewers_to_merge_request',
     description: 'Assigns reviewers to a GitLab Merge Request.',
     inputSchema: {
       type: 'object',
@@ -152,7 +174,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'list_project_members',
+    name: 'gitlab_list_project_members',
     description: 'Lists all members (contributors) of a given GitLab project.',
     inputSchema: {
       type: 'object',
@@ -166,7 +188,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'list_project_members_by_project_name',
+    name: 'gitlab_list_project_members_by_project_name',
     description: 'Lists all members (contributors) of a given GitLab project by project name.',
     inputSchema: {
       type: 'object',
@@ -180,7 +202,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'list_projects_by_name',
+    name: 'gitlab_list_projects_by_name',
     description: 'Filters GitLab projects by name using a fuzzy, case-insensitive match.',
     inputSchema: {
       type: 'object',
@@ -194,7 +216,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'list_all_projects',
+    name: 'gitlab_list_all_projects',
     description: 'Lists all accessible GitLab projects. (Try to use list_projects_by_name as it is more efficient)',
     inputSchema: {
       type: 'object',
@@ -202,7 +224,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'get_releases',
+    name: 'gitlab_get_releases',
     description: 'Fetches releases for a given GitLab project.',
     inputSchema: {
       type: 'object',
@@ -216,7 +238,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'get_releases_since_version',
+    name: 'gitlab_get_releases_since_version',
     description: 'Filters releases for a given GitLab project since a specific version.',
     inputSchema: {
       type: 'object',
@@ -234,7 +256,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'get_user_id_by_username',
+    name: 'gitlab_get_user_id_by_username',
     description: 'Retrieves the GitLab user ID for a given username.',
     inputSchema: {
       type: 'object',
@@ -248,7 +270,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'get_user_activities',
+    name: 'gitlab_get_user_activities',
     description: 'Fetches activities for a given GitLab user by their username, optionally filtered by date.',
     inputSchema: {
       type: 'object',
@@ -264,6 +286,55 @@ const tools: Tool[] = [
         },
       },
       required: ['username'],
+    },
+  },
+  {
+    name: 'jira_get_jira_ticket_details',
+    description: 'Fetches detailed information about a Jira ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID of the Jira ticket (e.g., "ALICE-123").',
+        },
+      },
+      required: ['ticketId'],
+    },
+  },
+  {
+    name: 'jira_get_jira_ticket_comments',
+    description: 'Fetches comments for a Jira ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID of the Jira ticket.',
+        },
+      },
+      required: ['ticketId'],
+    },
+  },
+  {
+    name: 'jira_add_labels_to_ticket',
+    description: 'Adds labels to a Jira ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID of the Jira ticket.',
+        },
+        labels: {
+          type: 'array',
+          items: {
+            type: 'string',
+          },
+          description: 'An array of labels to add to the ticket.',
+        },
+      },
+      required: ['ticketId', 'labels'],
     },
   },
 ];
@@ -292,7 +363,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
   try {
     switch (name) {
-      case 'get_merge_request_details': {
+      case 'gitlab_get_merge_request_details': {
         const { mrUrl } = args as { mrUrl: string };
         const result = await gitlabService.getMergeRequestDetailsFromUrl(mrUrl);
         return {
@@ -305,7 +376,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'get_merge_request_discussions': {
+      case 'gitlab_get_merge_request_discussions': {
         const { mrUrl } = args as { mrUrl: string };
         const result = await gitlabService.getMergeRequestDiscussionsFromUrl(mrUrl);
         return {
@@ -318,7 +389,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'get_file_content': {
+      case 'gitlab_get_file_content': {
         const { mrUrl, filePath, sha } = args as { mrUrl: string; filePath: string; sha: string };
         const result = await gitlabService.getFileContentFromMrUrl(mrUrl, filePath, sha);
         return {
@@ -331,7 +402,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'add_comment_to_merge_request': {
+      case 'gitlab_add_comment_to_merge_request': {
         const { mrUrl, commentBody, discussionId, position } = args as {
           mrUrl: string;
           commentBody: string;
@@ -354,7 +425,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'list_merge_requests': {
+      case 'gitlab_list_merge_requests': {
         const { projectPath } = args as { projectPath: string };
         const result = await gitlabService.listMergeRequests(projectPath);
         return {
@@ -367,7 +438,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'assign_reviewers_to_merge_request': {
+      case 'gitlab_assign_reviewers_to_merge_request': {
         const { mrUrl, reviewerIds } = args as {
           mrUrl: string;
           reviewerIds: number[];
@@ -388,7 +459,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'list_project_members': {
+      case 'gitlab_list_project_members': {
         const { mrUrl } = args as { mrUrl: string };
         const result = await gitlabService.listProjectMembersFromMrUrl(mrUrl);
         return {
@@ -401,7 +472,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'list_project_members_by_project_name': {
+      case 'gitlab_list_project_members_by_project_name': {
         const { projectName } = args as { projectName: string };
         const result = await gitlabService.listProjectMembersByProjectName(
           projectName
@@ -416,7 +487,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'list_projects_by_name': {
+      case 'gitlab_list_projects_by_name': {
         const { projectName } = args as { projectName: string };
         const result = await gitlabService.filterProjectsByName(projectName);
         return {
@@ -429,7 +500,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'list_all_projects': {
+      case 'gitlab_list_all_projects': {
         const result = await gitlabService.listProjects();
         return {
           content: [
@@ -441,7 +512,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'get_releases': {
+      case 'gitlab_get_releases': {
         const { projectPath } = args as { projectPath: string };
         const result = await gitlabService.getReleases(projectPath);
         return {
@@ -454,7 +525,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'get_releases_since_version': {
+      case 'gitlab_get_releases_since_version': {
         const { projectName, sinceVersion } = args as { projectName: string; sinceVersion: string };
         const projects = await gitlabService.filterProjectsByName(projectName);
         if (projects.length === 0) {
@@ -473,7 +544,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'get_user_id_by_username': {
+      case 'gitlab_get_user_id_by_username': {
         const { username } = args as { username: string };
         const userId = await gitlabService.getUserIdByUsername(username);
         return {
@@ -486,7 +557,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'get_user_activities': {
+      case 'gitlab_get_user_activities': {
         const { username, sinceDate } = args as { username: string; sinceDate?: string };
         const userId = await gitlabService.getUserIdByUsername(username);
         let activities;
@@ -503,6 +574,54 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             {
               type: 'text',
               text: JSON.stringify(activities, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'jira_get_jira_ticket_details': {
+        if (!jiraService) {
+          throw new Error('Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.');
+        }
+        const { ticketId } = args as { ticketId: string };
+        const result = await jiraService.getTicketDetails(ticketId);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'jira_get_jira_ticket_comments': {
+        if (!jiraService) {
+          throw new Error('Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.');
+        }
+        const { ticketId } = args as { ticketId: string };
+        const result = await jiraService.getTicketComments(ticketId);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'jira_add_labels_to_ticket': {
+        if (!jiraService) {
+          throw new Error('Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.');
+        }
+        const { ticketId, labels } = args as { ticketId: string; labels: string[] };
+        await jiraService.addLabelsToTicket(ticketId, labels);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Labels ${labels.join(', ')} added to Jira ticket ${ticketId} successfully.`,
             },
           ],
         };
