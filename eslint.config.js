@@ -13,10 +13,13 @@ export default [
       },
     },
     files: ['**/*.ts'],
-    rules: {
-      // Add any specific ESLint rules here
-    }
   },
   pluginJs.configs.recommended,
   ...tseslint.configs.recommended,
+  {
+    rules: {
+      // Add any specific ESLint rules here
+      "@typescript-eslint/no-explicit-any": "warn"
+    }
+  }
 ];
