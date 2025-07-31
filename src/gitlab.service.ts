@@ -147,10 +147,8 @@ export class GitLabService {
     const encodedProjectPath = encodeURIComponent(projectPath);
     const baseUrl = `projects/${encodedProjectPath}/merge_requests/${mrIid}`;
 
-    // First get the MR details
     const mrDetails = await this.callGitLabApi<any>(baseUrl);
     const mrChanges = await this.callGitLabApi<any>(`projects/${encodedProjectPath}/merge_requests/${mrIid}/changes`);
-    const mrDiscussions = await this.callGitLabApi<any>(`projects/${encodedProjectPath}/merge_requests/${mrIid}/discussions`);
 
     // Map file diffs
     const fileDiffs = mrChanges.changes.map((change: any) => ({
@@ -162,35 +160,6 @@ export class GitLabService {
       diff: change.diff,
     }));
 
-    // Map discussions
-    const discussions = mrDiscussions.map((discussion: any) => ({
-      id: discussion.id,
-      notes: discussion.notes.map((note: any) => ({
-        id: note.id,
-        body: note.body,
-        author: {
-          name: note.author.name,
-          username: note.author.username,
-        },
-        system: note.system,
-        position: note.position
-          ? {
-              base_sha: note.position.base_sha,
-              start_sha: note.position.start_sha,
-              head_sha: note.position.head_sha,
-              position_type: note.position.position_type,
-              old_path: note.position.old_path,
-              new_path: note.position.new_path,
-              new_line: note.position.new_line,
-              old_line: note.position.old_line,
-            }
-          : undefined,
-      })),
-      postedAsInline: discussion.individual_note, // Assuming individual_note means inline
-    }));
-
-    // Placeholder for parsedDiffs and fileContents - requires more complex parsing
-    // For now, we'll leave them as empty or basic transformations.
     const parsedDiffs = fileDiffs.map((diff: any) => ({
       filePath: diff.new_path,
       oldPath: diff.old_path,
@@ -199,12 +168,6 @@ export class GitLabService {
       isRenamed: diff.renamed_file,
       hunks: this.parseDiff(diff.diff),
     }));
-
-    const fileContents = new Map<
-      string,
-      { oldContent?: string[]; newContent?: string[] }
-    >();
-    // To populate fileContents, you'd need to fetch file content directly or parse diffs more deeply.
 
     return {
       projectPath: mrDetails.path_with_namespace,
@@ -221,24 +184,9 @@ export class GitLabService {
       fileDiffs: fileDiffs,
       diffForPrompt: fileDiffs.map((diff: any) => diff.diff).join("\n"),
       parsedDiffs: parsedDiffs,
-      fileContents: fileContents,
-      discussions: discussions,
-      existingFeedback: discussions.flatMap((discussion: any) =>
-        discussion.notes
-          .filter((note: any) => note.position) // Only notes with positions are feedback
-          .map((note: any) => ({
-            id: note.id.toString(),
-            lineNumber: note.position.new_line || note.position.old_line,
-            filePath: note.position.new_path || note.position.old_path,
-            severity: "Info", // Default to Info, can be refined later if GitLab API provides severity
-            title: "GitLab Comment",
-            description: note.body,
-            lineContent: "", // This would require fetching the actual line content
-            position: note.position,
-            status: "submitted",
-            isExisting: true,
-          }))
-      ),
+      fileContents: new Map(), // fileContents will be populated by a separate tool
+      discussions: [], // Discussions will be fetched by a separate tool
+      existingFeedback: [], // Existing feedback will be derived from discussions
     };
   }
 
@@ -246,6 +194,74 @@ export class GitLabService {
   async getMergeRequestDetailsFromUrl(mrUrl: string): Promise<GitLabMRDetails> {
     const { projectPath, mrIid } = this.parseMrUrl(mrUrl, this.config.url);
     return this.getMergeRequestDetails(projectPath, mrIid);
+  }
+
+  // New tool: Get Merge Request Discussions
+  async getMergeRequestDiscussions(
+    projectPath: string,
+    mrIid: number
+  ): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const mrDiscussions = await this.callGitLabApi<any>(`projects/${encodedProjectPath}/merge_requests/${mrIid}/discussions`);
+
+    // Map discussions
+    const discussions = mrDiscussions.map((discussion: any) => ({
+      id: discussion.id,
+      notes: discussion.notes.map((note: any) => ({
+        id: note.id,
+        body: note.body,
+        author: {
+          name: note.author.name,
+          username: note.author.username,
+        },
+        system: note.system,
+        position: note.position
+          ?
+            {
+              base_sha: note.position.base_sha,
+              start_sha: note.position.start_sha,
+              head_sha: note.position.head_sha,
+              position_type: note.position.position_type,
+              old_path: note.position.old_path,
+              new_path: note.position.new_path,
+              new_line: note.position.new_line,
+              old_line: note.position.old_line,
+            }
+          : undefined,
+      })),
+      postedAsInline: discussion.individual_note, // Assuming individual_note means inline
+    }));
+    return discussions;
+  }
+
+  // Convenience method to get MR discussions from URL
+  async getMergeRequestDiscussionsFromUrl(mrUrl: string): Promise<any[]> {
+    const { projectPath, mrIid } = this.parseMrUrl(mrUrl, this.config.url);
+    return this.getMergeRequestDiscussions(projectPath, mrIid);
+  }
+
+  // New tool: Get File Content
+  async getFileContent(
+    projectPath: string,
+    filePath: string,
+    sha: string
+  ): Promise<string> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const encodedFilePath = encodeURIComponent(filePath);
+    const content = await this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/repository/files/${encodedFilePath}/raw?ref=${sha}`
+    );
+    return content;
+  }
+
+  // Convenience method to get file content from MR URL and file path/SHA
+  async getFileContentFromMrUrl(
+    mrUrl: string,
+    filePath: string,
+    sha: string
+  ): Promise<string> {
+    const { projectPath } = this.parseMrUrl(mrUrl, this.config.url);
+    return this.getFileContent(projectPath, filePath, sha);
   }
 
   // 2. Add Comment to Merge Request

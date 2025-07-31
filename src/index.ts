@@ -11,6 +11,15 @@ import {
 import { GitLabService } from './gitlab.service.js';
 import { GitLabConfig } from './gitlab.js';
 
+enum ToolName {
+  GetMergeRequestDetails = 'get_merge_request_details',
+  GetMergeRequestDiscussions = 'get_merge_request_discussions',
+  GetFileContent = 'get_file_content',
+  AddCommentToMergeRequest = 'add_comment_to_merge_request',
+  ListProjects = 'list_projects',
+  ListMergeRequests = 'list_merge_requests',
+}
+
 // Load GitLab configuration from environment variables
 const gitlabUrl = process.env.GITLAB_URL;
 const gitlabAccessToken = process.env.GITLAB_ACCESS_TOKEN;
@@ -43,8 +52,8 @@ const server = new Server(
 // Define the tools
 const tools: Tool[] = [
   {
-    name: 'get_merge_request_details',
-    description: 'Fetches detailed information about a GitLab Merge Request, including file diffs, discussions, and existing feedback.',
+    name: ToolName.GetMergeRequestDetails,
+    description: 'Fetches detailed information about a GitLab Merge Request, including file diffs.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -57,7 +66,43 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'add_comment_to_merge_request',
+    name: ToolName.GetMergeRequestDiscussions,
+    description: 'Fetches discussions for a GitLab Merge Request.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of the GitLab Merge Request.',
+        },
+      },
+      required: ['mrUrl'],
+    },
+  },
+  {
+    name: ToolName.GetFileContent,
+    description: 'Fetches the content of a specific file at a given SHA in a GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of the GitLab Merge Request (used to derive project path).',
+        },
+        filePath: {
+          type: 'string',
+          description: 'The path of the file to fetch.',
+        },
+        sha: {
+          type: 'string',
+          description: 'The SHA of the commit or branch to fetch the file from.',
+        },
+      },
+      required: ['mrUrl', 'filePath', 'sha'],
+    },
+  },
+  {
+    name: ToolName.AddCommentToMergeRequest,
     description: 'Adds a comment to a GitLab Merge Request. Can be a general comment, a reply to an existing discussion, or an inline comment on a specific line.',
     inputSchema: {
       type: 'object',
@@ -93,7 +138,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'list_projects',
+    name: ToolName.ListProjects,
     description: 'Lists all accessible GitLab projects.',
     inputSchema: {
       type: 'object',
@@ -101,7 +146,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'list_merge_requests',
+    name: ToolName.ListMergeRequests,
     description: 'Lists merge requests for a given GitLab project.',
     inputSchema: {
       type: 'object',
@@ -127,7 +172,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
   try {
     switch (name) {
-      case 'get_merge_request_details': {
+      case ToolName.GetMergeRequestDetails: {
         const { mrUrl } = args as { mrUrl: string };
         const result = await gitlabMcp.getMergeRequestDetailsFromUrl(mrUrl);
         return {
@@ -140,7 +185,33 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'add_comment_to_merge_request': {
+      case ToolName.GetMergeRequestDiscussions: {
+        const { mrUrl } = args as { mrUrl: string };
+        const result = await gitlabMcp.getMergeRequestDiscussionsFromUrl(mrUrl);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case ToolName.GetFileContent: {
+        const { mrUrl, filePath, sha } = args as { mrUrl: string; filePath: string; sha: string };
+        const result = await gitlabMcp.getFileContentFromMrUrl(mrUrl, filePath, sha);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: result,
+            },
+          ],
+        };
+      }
+
+      case ToolName.AddCommentToMergeRequest: {
         const { mrUrl, commentBody, discussionId, position } = args as {
           mrUrl: string;
           commentBody: string;
@@ -163,7 +234,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'list_projects': {
+      case ToolName.ListProjects: {
         const result = await gitlabMcp.listProjects();
         return {
           content: [
@@ -175,7 +246,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'list_merge_requests': {
+      case ToolName.ListMergeRequests: {
         const { projectPath } = args as { projectPath: string };
         const result = await gitlabMcp.listMergeRequests(projectPath);
         return {
