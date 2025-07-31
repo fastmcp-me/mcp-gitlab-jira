@@ -71,10 +71,8 @@ export class JiraService {
     try {
       await this.client.issues.editIssue({
         issueIdOrKey: ticketId,
-        issueEditRequest: {
-          update: {
-            labels: [{ set: labels }],
-          },
+        update: {
+          labels: [{ set: labels }],
         },
       });
       console.log(`Labels added to Jira ticket ${ticketId} successfully.`);
