@@ -5,6 +5,7 @@ import {
   GitLabProject,
   GitLabMergeRequest,
   GitLabPosition,
+  GitLabUser,
   ParsedHunk,
 } from "./gitlab.js";
 
@@ -440,11 +441,31 @@ export class GitLabService {
 
   // New tool: Get User ID by Username
   async getUserIdByUsername(username: string): Promise<number> {
-    const users = await this.callGitLabApi<any[]>(`users?username=${username}`);
-    if (users.length === 0) {
-      throw new Error(`User with username ${username} not found.`);
+    // First try exact username match
+    const exactUsers = await this.callGitLabApi<GitLabUser[]>(`users?username=${username}`);
+    if (exactUsers.length > 0) {
+      return exactUsers[0].id;
     }
-    return users[0].id;
+
+    // Fallback: search all users and filter by partial username (case-insensitive)
+    const allUsers = await this.callGitLabApi<GitLabUser[]>(`users?per_page=100`);
+    const lowerCaseUsername = username.toLowerCase();
+    
+    const matchingUsers = allUsers.filter(user => 
+      user.username.toLowerCase().includes(lowerCaseUsername) ||
+      user.name.toLowerCase().includes(lowerCaseUsername)
+    );
+
+    if (matchingUsers.length === 0) {
+      throw new Error(`User with username containing '${username}' not found.`);
+    }
+
+    if (matchingUsers.length > 1) {
+      const userList = matchingUsers.map(user => `${user.username} (${user.name})`).join(', ');
+      throw new Error(`Multiple users found matching '${username}': ${userList}. Please be more specific.`);
+    }
+
+    return matchingUsers[0].id;
   }
 
   // New tool: Get User Activities
