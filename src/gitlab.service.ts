@@ -437,4 +437,23 @@ export class GitLabService {
       }
     });
   }
+
+  // New tool: Get User ID by Username
+  async getUserIdByUsername(username: string): Promise<number> {
+    const users = await this.callGitLabApi<any[]>(`users?username=${username}`);
+    if (users.length === 0) {
+      throw new Error(`User with username ${username} not found.`);
+    }
+    return users[0].id;
+  }
+
+  // New tool: Get User Activities
+  async getUserActivities(userId: number, sinceDate?: Date): Promise<any[]> {
+    let endpoint = `users/${userId}/events`;
+    if (sinceDate) {
+      // GitLab API expects ISO 8601 format for `after` parameter
+      endpoint += `?after=${sinceDate.toISOString().split('T')[0]}`;
+    }
+    return this.callGitLabApi<any[]>(endpoint);
+  }
 }

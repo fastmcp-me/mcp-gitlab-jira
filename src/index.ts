@@ -25,7 +25,7 @@ const gitlabConfig: GitLabConfig = {
   accessToken: gitlabAccessToken,
 };
 
-const gitlabMcp = new GitLabService(gitlabConfig);
+const gitlabService = new GitLabService(gitlabConfig);
 
 // Create the MCP server
 // Define the tools
@@ -216,21 +216,54 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'filter_releases_since_version',
+    name: 'get_releases_since_version',
     description: 'Filters releases for a given GitLab project since a specific version.',
     inputSchema: {
       type: 'object',
       properties: {
-        projectPath: {
+        projectName: {
           type: 'string',
-          description: 'The path of the GitLab project (e.g., "namespace/project-name").',
+          description: 'The name or partial name of the GitLab project.',
         },
         sinceVersion: {
           type: 'string',
           description: 'The version to filter releases since (e.g., "1.0.0").',
         },
       },
-      required: ['projectPath', 'sinceVersion'],
+      required: ['projectName', 'sinceVersion'],
+    },
+  },
+  {
+    name: 'get_user_id_by_username',
+    description: 'Retrieves the GitLab user ID for a given username.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: {
+          type: 'string',
+          description: 'The username of the GitLab user.',
+        },
+      },
+      required: ['username'],
+    },
+  },
+  {
+    name: 'get_user_activities',
+    description: 'Fetches activities for a given GitLab user by their username, optionally filtered by date.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        username: {
+          type: 'string',
+          description: 'The username of the GitLab user.',
+        },
+        sinceDate: {
+          type: 'string',
+          format: 'date',
+          description: 'Optional: Activities since this date (YYYY-MM-DD). Defaults to 1 day ago if not provided.',
+        },
+      },
+      required: ['username'],
     },
   },
 ];
@@ -261,7 +294,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
     switch (name) {
       case 'get_merge_request_details': {
         const { mrUrl } = args as { mrUrl: string };
-        const result = await gitlabMcp.getMergeRequestDetailsFromUrl(mrUrl);
+        const result = await gitlabService.getMergeRequestDetailsFromUrl(mrUrl);
         return {
           content: [
             {
@@ -274,7 +307,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'get_merge_request_discussions': {
         const { mrUrl } = args as { mrUrl: string };
-        const result = await gitlabMcp.getMergeRequestDiscussionsFromUrl(mrUrl);
+        const result = await gitlabService.getMergeRequestDiscussionsFromUrl(mrUrl);
         return {
           content: [
             {
@@ -287,7 +320,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'get_file_content': {
         const { mrUrl, filePath, sha } = args as { mrUrl: string; filePath: string; sha: string };
-        const result = await gitlabMcp.getFileContentFromMrUrl(mrUrl, filePath, sha);
+        const result = await gitlabService.getFileContentFromMrUrl(mrUrl, filePath, sha);
         return {
           content: [
             {
@@ -305,7 +338,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           discussionId?: string;
           position?: any;
         };
-        const result = await gitlabMcp.addCommentToMergeRequestFromUrl(
+        const result = await gitlabService.addCommentToMergeRequestFromUrl(
           mrUrl,
           commentBody,
           discussionId,
@@ -323,7 +356,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'list_merge_requests': {
         const { projectPath } = args as { projectPath: string };
-        const result = await gitlabMcp.listMergeRequests(projectPath);
+        const result = await gitlabService.listMergeRequests(projectPath);
         return {
           content: [
             {
@@ -339,7 +372,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
           mrUrl: string;
           reviewerIds: number[];
         };
-        const result = await gitlabMcp.assignReviewersToMergeRequestFromUrl(
+        const result = await gitlabService.assignReviewersToMergeRequestFromUrl(
           mrUrl,
           reviewerIds
         );
@@ -357,7 +390,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'list_project_members': {
         const { mrUrl } = args as { mrUrl: string };
-        const result = await gitlabMcp.listProjectMembersFromMrUrl(mrUrl);
+        const result = await gitlabService.listProjectMembersFromMrUrl(mrUrl);
         return {
           content: [
             {
@@ -370,7 +403,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'list_project_members_by_project_name': {
         const { projectName } = args as { projectName: string };
-        const result = await gitlabMcp.listProjectMembersByProjectName(
+        const result = await gitlabService.listProjectMembersByProjectName(
           projectName
         );
         return {
@@ -385,7 +418,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'list_projects_by_name': {
         const { projectName } = args as { projectName: string };
-        const result = await gitlabMcp.filterProjectsByName(projectName);
+        const result = await gitlabService.filterProjectsByName(projectName);
         return {
           content: [
             {
@@ -397,7 +430,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       }
 
       case 'list_all_projects': {
-        const result = await gitlabMcp.listProjects();
+        const result = await gitlabService.listProjects();
         return {
           content: [
             {
@@ -410,7 +443,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
       case 'get_releases': {
         const { projectPath } = args as { projectPath: string };
-        const result = await gitlabMcp.getReleases(projectPath);
+        const result = await gitlabService.getReleases(projectPath);
         return {
           content: [
             {
@@ -421,14 +454,55 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'filter_releases_since_version': {
-        const { projectPath, sinceVersion } = args as { projectPath: string; sinceVersion: string };
-        const result = await gitlabMcp.filterReleasesSinceVersion(projectPath, sinceVersion);
+      case 'get_releases_since_version': {
+        const { projectName, sinceVersion } = args as { projectName: string; sinceVersion: string };
+        const projects = await gitlabService.filterProjectsByName(projectName);
+        if (projects.length === 0) {
+          throw new Error(`No project found with name: ${projectName}`);
+        }
+        // Assuming the first project is the desired one, or you might want to add more logic to select the correct project
+        const projectPath = projects[0].path_with_namespace;
+        const result = await gitlabService.filterReleasesSinceVersion(projectPath, sinceVersion);
         return {
           content: [
             {
               type: 'text',
               text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_user_id_by_username': {
+        const { username } = args as { username: string };
+        const userId = await gitlabService.getUserIdByUsername(username);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify({ userId }, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'get_user_activities': {
+        const { username, sinceDate } = args as { username: string; sinceDate?: string };
+        const userId = await gitlabService.getUserIdByUsername(username);
+        let activities;
+        if (sinceDate) {
+          activities = await gitlabService.getUserActivities(userId, new Date(sinceDate));
+        } else {
+          // Default to 1 day ago if sinceDate is not provided
+          const oneDayAgo = new Date();
+          oneDayAgo.setDate(oneDayAgo.getDate() - 1);
+          activities = await gitlabService.getUserActivities(userId, oneDayAgo);
+        }
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(activities, null, 2),
             },
           ],
         };
