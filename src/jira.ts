@@ -27,3 +27,11 @@ export interface JiraComment {
   created: string;
   updated: string;
 }
+
+export interface JiraTransition {
+  id: string;
+  name: string;
+  to: {
+    name: string;
+  };
+}

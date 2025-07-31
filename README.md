@@ -1,6 +1,6 @@
-# GitLab MCP Server
+# MCP GitLab Jira Server
 
-A Model Context Protocol (MCP) server for GitLab on-premise integration. This server allows AI agents like gemini-cli to interact with your GitLab instance.
+A Model Context Protocol (MCP) server for GitLab and Jira integration. This server allows AI agents like gemini-cli to interact with your GitLab and Jira instances.
 
 ## Features
 

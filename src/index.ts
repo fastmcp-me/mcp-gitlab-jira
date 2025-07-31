@@ -67,20 +67,6 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'gitlab_get_merge_request_discussions',
-    description: 'Fetches discussions for a GitLab Merge Request.',
-    inputSchema: {
-      type: 'object',
-      properties: {
-        mrUrl: {
-          type: 'string',
-          description: 'The URL of the GitLab Merge Request.',
-        },
-      },
-      required: ['mrUrl'],
-    },
-  },
-  {
     name: 'gitlab_get_file_content',
     description: 'Fetches the content of a specific file at a given SHA in a GitLab project.',
     inputSchema: {
@@ -351,6 +337,34 @@ const tools: Tool[] = [
       required: ['jql'],
     },
   },
+  // {
+  //   name: 'jira_create_ticket',
+  //   description: 'Creates a new Jira ticket with given fields.',
+  //   inputSchema: {
+  //     type: 'object',
+  //     properties: {
+  //       fields: {
+  //         type: 'object',
+  //         description: 'Jira createIssue fields payload.',
+  //       },
+  //     },
+  //     required: ['fields'],
+  //   },
+  // },
+  {
+    name: 'jira_get_available_transitions',
+    description: 'Fetches available transitions for a Jira ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID of the Jira ticket (e.g., "ALICE-123").',
+        },
+      },
+      required: ['ticketId'],
+    },
+  },
 ];
 
 // Create the MCP server
@@ -380,19 +394,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       case 'gitlab_get_merge_request_details': {
         const { mrUrl } = args as { mrUrl: string };
         const result = await gitlabService.getMergeRequestDetailsFromUrl(mrUrl);
-        return {
-          content: [
-            {
-              type: 'text',
-              text: JSON.stringify(result, null, 2),
-            },
-          ],
-        };
-      }
-
-      case 'gitlab_get_merge_request_discussions': {
-        const { mrUrl } = args as { mrUrl: string };
-        const result = await gitlabService.getMergeRequestDiscussionsFromUrl(mrUrl);
         return {
           content: [
             {
@@ -652,6 +653,38 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             {
               type: 'text',
               text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'jira_get_available_transitions': {
+        if (!jiraService) {
+          throw new Error('Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.');
+        }
+        const { ticketId } = args as { ticketId: string };
+        const result = await jiraService.getAvailableTransitions(ticketId);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'jira_create_ticket': {
+        if (!jiraService) {
+          throw new Error('Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.');
+        }
+        const { fields } = args as { fields: any };
+        await jiraService.createTicket({ fields });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'Jira ticket created successfully.',
             },
           ],
         };

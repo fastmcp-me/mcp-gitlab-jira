@@ -1,5 +1,5 @@
 import { Version3Client } from 'jira.js';
-import { JiraConfig, JiraTicket, JiraComment } from './jira';
+import { JiraConfig, JiraTicket, JiraComment, JiraTransition } from './jira';
 
 export class JiraService {
   private client: Version3Client;
@@ -103,6 +103,44 @@ export class JiraService {
       );
     } catch (error) {
       console.error(`Error searching Jira tickets with JQL: ${jql}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Creates a new Jira ticket with the given createIssue parameters.
+   * @param params The createIssue parameters for Jira API (must include fields object).
+   */
+  /**
+   * Creates a new Jira ticket using the provided parameters.
+   * @param params The createIssue parameters for Jira API.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async createTicket(params: any): Promise<void> {
+    try {
+      await this.client.issues.createIssue(params);
+      console.log('Jira ticket created successfully.');
+    } catch (error) {
+      console.error('Error creating Jira ticket:', error);
+      throw error;
+    }
+  }
+
+  async getAvailableTransitions(ticketId: string): Promise<JiraTransition[]> {
+    try {
+      const transitions = await this.client.issues.getTransitions({ issueIdOrKey: ticketId });
+      return (
+        transitions.transitions?.filter((transition) => transition.id && transition.name)
+          .map((transition) => ({
+            id: transition.id!,
+            name: transition.name!,
+            to: {
+              name: transition.to?.name || '',
+            },
+          })) || []
+      );
+    } catch (error) {
+      console.error(`Error fetching available transitions for Jira ticket ${ticketId}:`, error);
       throw error;
     }
   }
