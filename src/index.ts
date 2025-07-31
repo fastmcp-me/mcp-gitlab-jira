@@ -215,6 +215,24 @@ const tools: Tool[] = [
       required: ['projectPath'],
     },
   },
+  {
+    name: 'filter_releases_since_version',
+    description: 'Filters releases for a given GitLab project since a specific version.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project (e.g., "namespace/project-name").',
+        },
+        sinceVersion: {
+          type: 'string',
+          description: 'The version to filter releases since (e.g., "1.0.0").',
+        },
+      },
+      required: ['projectPath', 'sinceVersion'],
+    },
+  },
 ];
 
 // Create the MCP server
@@ -393,6 +411,19 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
       case 'get_releases': {
         const { projectPath } = args as { projectPath: string };
         const result = await gitlabMcp.getReleases(projectPath);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'filter_releases_since_version': {
+        const { projectPath, sinceVersion } = args as { projectPath: string; sinceVersion: string };
+        const result = await gitlabMcp.filterReleasesSinceVersion(projectPath, sinceVersion);
         return {
           content: [
             {

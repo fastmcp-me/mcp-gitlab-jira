@@ -422,4 +422,19 @@ export class GitLabService {
     const encodedProjectPath = encodeURIComponent(projectPath);
     return this.callGitLabApi<any[]>(`projects/${encodedProjectPath}/releases`);
   }
+
+  // New tool: Filter Releases Since a Specific Version
+  async filterReleasesSinceVersion(projectPath: string, sinceVersion: string): Promise<any[]> {
+    const allReleases = await this.getReleases(projectPath);
+    const semver = await import('semver');
+
+    return allReleases.filter(release => {
+      try {
+        return semver.gte(release.tag_name, sinceVersion);
+      } catch (error) {
+        console.warn(`Could not parse version ${release.tag_name} or ${sinceVersion}: ${error}`);
+        return false;
+      }
+    });
+  }
 }
