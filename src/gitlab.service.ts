@@ -10,6 +10,8 @@ import {
 
 export class GitLabService {
   private readonly config: GitLabConfig;
+  private projectCache: { data: GitLabProject[]; timestamp: number } | null = null;
+  private readonly CACHE_DURATION_MS = 24 * 60 * 60 * 1000; // 24 hours
 
   constructor(config: GitLabConfig) {
     this.config = config;
@@ -325,8 +327,23 @@ export class GitLabService {
 
   // 3. List Projects
   async listProjects(): Promise<GitLabProject[]> {
+    if (this.projectCache && Date.now() - this.projectCache.timestamp < this.CACHE_DURATION_MS) {
+      return this.projectCache.data;
+    }
+
     const url = `projects?membership=true&min_access_level=30&order_by=last_activity_at&sort=desc&per_page=100`;
-    return this.callGitLabApi<GitLabProject[]>(url);
+    const projects = await this.callGitLabApi<any[]>(url);
+
+    const simplifiedProjects: GitLabProject[] = projects.map(project => ({
+      id: project.id,
+      name: project.name,
+      name_with_namespace: project.name_with_namespace,
+      path_with_namespace: project.path_with_namespace,
+      last_activity_at: project.last_activity_at,
+    }));
+
+    this.projectCache = { data: simplifiedProjects, timestamp: Date.now() };
+    return simplifiedProjects;
   }
 
   // 4. List Merge Requests for a Project
@@ -335,5 +352,50 @@ export class GitLabService {
     return this.callGitLabApi<GitLabMergeRequest[]>(
       `projects/${encodedProjectPath}/merge_requests`
     );
+  }
+
+  // New tool: Assign Reviewers to Merge Request
+  async assignReviewersToMergeRequest(
+    projectPath: string,
+    mrIid: number,
+    reviewerIds: number[]
+  ): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi(
+      `projects/${encodedProjectPath}/merge_requests/${mrIid}`,
+      "PUT",
+      { reviewer_ids: reviewerIds }
+    );
+  }
+
+  // Convenience method to assign reviewers from MR URL
+  async assignReviewersToMergeRequestFromUrl(
+    mrUrl: string,
+    reviewerIds: number[]
+  ): Promise<any> {
+    const { projectPath, mrIid } = this.parseMrUrl(mrUrl, this.config.url);
+    return this.assignReviewersToMergeRequest(projectPath, mrIid, reviewerIds);
+  }
+
+  // New tool: List Project Members (Contributors)
+  async listProjectMembers(projectPath: string): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any[]>(`projects/${encodedProjectPath}/members/all`);
+  }
+
+  // Convenience method to list project members from MR URL
+  async listProjectMembersFromMrUrl(mrUrl: string): Promise<any[]> {
+    const { projectPath } = this.parseMrUrl(mrUrl, this.config.url);
+    return this.listProjectMembers(projectPath);
+  }
+
+  // New tool: List Project Members by Project Name
+  async listProjectMembersByProjectName(projectName: string): Promise<any[]> {
+    const projects = await this.listProjects();
+    const project = projects.find(p => p.name === projectName);
+    if (!project) {
+      throw new Error(`Project with name ${projectName} not found.`);
+    }
+    return this.listProjectMembers(project.path_with_namespace);
   }
 }

@@ -139,6 +139,15 @@ export interface GitLabMergeRequest {
   project_name?: string;
 }
 
+export interface GitLabUser {
+  id: number;
+  username: string;
+  name: string;
+  state: string;
+  avatar_url: string;
+  web_url: string;
+}
+
 export function parseGitLabMergeRequestUrl(url: string): { projectId: number; mrIid: number } {
   const match = url.match(/\/(?<projectId>[^/]+)\/(?:-\/)?merge_requests\/(?<mrIid>\d+)$/);
   if (!match || !match.groups) {

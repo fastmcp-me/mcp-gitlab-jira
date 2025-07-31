@@ -113,6 +113,55 @@ const tools: Tool[] = [
       required: ['projectPath'],
     },
   },
+  {
+    name: 'assign_reviewers_to_merge_request',
+    description: 'Assigns reviewers to a GitLab Merge Request.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of the GitLab Merge Request.',
+        },
+        reviewerIds: {
+          type: 'array',
+          items: {
+            type: 'number',
+          },
+          description: 'An array of GitLab user IDs to assign as reviewers.',
+        },
+      },
+      required: ['mrUrl', 'reviewerIds'],
+    },
+  },
+  {
+    name: 'list_project_members',
+    description: 'Lists all members (contributors) of a given GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of a GitLab Merge Request within the project.',
+        },
+      },
+      required: ['mrUrl'],
+    },
+  },
+  {
+    name: 'list_project_members_by_project_name',
+    description: 'Lists all members (contributors) of a given GitLab project by project name.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectName: {
+          type: 'string',
+          description: 'The name of the GitLab project.',
+        },
+      },
+      required: ['projectName'],
+    },
+  },
 ];
 
 // Handle tool listing
@@ -177,6 +226,51 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       case 'list_merge_requests': {
         const { projectPath } = args as { projectPath: string };
         const result = await gitlabMcp.listMergeRequests(projectPath);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'assign_reviewers_to_merge_request': {
+        const { mrUrl, reviewerIds } = args as {
+          mrUrl: string;
+          reviewerIds: number[];
+        };
+        const result = await gitlabMcp.assignReviewersToMergeRequestFromUrl(
+          mrUrl,
+          reviewerIds
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Reviewers assigned successfully: ${JSON.stringify(result)}`,
+            },
+          ],
+        };
+      }
+
+      case 'list_project_members': {
+        const { mrUrl } = args as { mrUrl: string };
+        const result = await gitlabMcp.listProjectMembersFromMrUrl(mrUrl);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'list_project_members_by_project_name': {
+        const { projectName } = args as { projectName: string };
+        const result = await gitlabMcp.listProjectMembersByProjectName(projectName);
         return {
           content: [
             {

@@ -130,6 +130,12 @@ Adds a comment to a merge request.
 - `discussionId` (string, optional): ID of existing discussion to reply to
 - `position` (object, optional): Position for inline comments
 
+### 5. `filter_projects_by_name`
+Filters GitLab projects by name using a fuzzy, case-insensitive match.
+
+**Parameters**:
+- `projectName` (string): The name or partial name of the project to filter by.
+
 ## Troubleshooting
 
 ### Common Issues
