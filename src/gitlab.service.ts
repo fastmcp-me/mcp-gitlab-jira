@@ -340,6 +340,13 @@ export class GitLabService {
       name_with_namespace: project.name_with_namespace,
       path_with_namespace: project.path_with_namespace,
       last_activity_at: project.last_activity_at,
+      ssh_url_to_repo: project.ssh_url_to_repo,
+      http_url_to_repo: project.http_url_to_repo,
+      web_url: project.web_url,
+      readme_url: project.readme_url,
+      issue_branch_template: project.issue_branch_template,
+      statistics: project.statistics,
+      _links: project._links,
     }));
 
     this.projectCache = { data: simplifiedProjects, timestamp: Date.now() };
@@ -397,5 +404,16 @@ export class GitLabService {
       throw new Error(`Project with name ${projectName} not found.`);
     }
     return this.listProjectMembers(project.path_with_namespace);
+  }
+
+  // New tool: Filter Projects by Name (fuzzy, case-insensitive)
+  async filterProjectsByName(projectName: string): Promise<GitLabProject[]> {
+    const allProjects = await this.listProjects();
+    const lowerCaseProjectName = projectName.toLowerCase();
+
+    return allProjects.filter(project =>
+      project.name.toLowerCase().includes(lowerCaseProjectName) ||
+      project.name_with_namespace.toLowerCase().includes(lowerCaseProjectName)
+    );
   }
 }

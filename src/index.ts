@@ -11,15 +11,6 @@ import {
 import { GitLabService } from './gitlab.service.js';
 import { GitLabConfig } from './gitlab.js';
 
-enum ToolName {
-  GetMergeRequestDetails = 'get_merge_request_details',
-  GetMergeRequestDiscussions = 'get_merge_request_discussions',
-  GetFileContent = 'get_file_content',
-  AddCommentToMergeRequest = 'add_comment_to_merge_request',
-  ListProjects = 'list_projects',
-  ListMergeRequests = 'list_merge_requests',
-}
-
 // Load GitLab configuration from environment variables
 const gitlabUrl = process.env.GITLAB_URL;
 const gitlabAccessToken = process.env.GITLAB_ACCESS_TOKEN;
@@ -37,22 +28,10 @@ const gitlabConfig: GitLabConfig = {
 const gitlabMcp = new GitLabService(gitlabConfig);
 
 // Create the MCP server
-const server = new Server(
-  {
-    name: 'gitlab-mcp-server',
-    version: '1.0.0',
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
-);
-
 // Define the tools
 const tools: Tool[] = [
   {
-    name: ToolName.GetMergeRequestDetails,
+    name: 'get_merge_request_details',
     description: 'Fetches detailed information about a GitLab Merge Request, including file diffs.',
     inputSchema: {
       type: 'object',
@@ -66,7 +45,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: ToolName.GetMergeRequestDiscussions,
+    name: 'get_merge_request_discussions',
     description: 'Fetches discussions for a GitLab Merge Request.',
     inputSchema: {
       type: 'object',
@@ -80,7 +59,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: ToolName.GetFileContent,
+    name: 'get_file_content',
     description: 'Fetches the content of a specific file at a given SHA in a GitLab project.',
     inputSchema: {
       type: 'object',
@@ -102,7 +81,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: ToolName.AddCommentToMergeRequest,
+    name: 'add_comment_to_merge_request',
     description: 'Adds a comment to a GitLab Merge Request. Can be a general comment, a reply to an existing discussion, or an inline comment on a specific line.',
     inputSchema: {
       type: 'object',
@@ -138,15 +117,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: ToolName.ListProjects,
-    description: 'Lists all accessible GitLab projects.',
-    inputSchema: {
-      type: 'object',
-      properties: {},
-    },
-  },
-  {
-    name: ToolName.ListMergeRequests,
+    name: 'list_merge_requests',
     description: 'Lists merge requests for a given GitLab project.',
     inputSchema: {
       type: 'object',
@@ -159,7 +130,91 @@ const tools: Tool[] = [
       required: ['projectPath'],
     },
   },
+  {
+    name: 'assign_reviewers_to_merge_request',
+    description: 'Assigns reviewers to a GitLab Merge Request.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of the GitLab Merge Request.',
+        },
+        reviewerIds: {
+          type: 'array',
+          items: {
+            type: 'number',
+          },
+          description: 'An array of GitLab user IDs to assign as reviewers.',
+        },
+      },
+      required: ['mrUrl', 'reviewerIds'],
+    },
+  },
+  {
+    name: 'list_project_members',
+    description: 'Lists all members (contributors) of a given GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of a GitLab Merge Request within the project.',
+        },
+      },
+      required: ['mrUrl'],
+    },
+  },
+  {
+    name: 'list_project_members_by_project_name',
+    description: 'Lists all members (contributors) of a given GitLab project by project name.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectName: {
+          type: 'string',
+          description: 'The name of the GitLab project.',
+        },
+      },
+      required: ['projectName'],
+    },
+  },
+  {
+    name: 'list_projects_by_name',
+    description: 'Filters GitLab projects by name using a fuzzy, case-insensitive match.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectName: {
+          type: 'string',
+          description: 'The name or partial name of the project to filter by.',
+        },
+      },
+      required: ['projectName'],
+    },
+  },
+  {
+    name: 'list_all_projects',
+    description: 'Lists all accessible GitLab projects. (Try to use list_projects_by_name as it is more efficient)',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
 ];
+
+// Create the MCP server
+const server = new Server(
+  {
+    name: 'gitlab-mcp-server',
+    version: '1.0.0',
+  },
+  {
+    capabilities: {
+      tools: {},
+    },
+  }
+);
 
 // Handle tool listing
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -172,7 +227,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
 
   try {
     switch (name) {
-      case ToolName.GetMergeRequestDetails: {
+      case 'get_merge_request_details': {
         const { mrUrl } = args as { mrUrl: string };
         const result = await gitlabMcp.getMergeRequestDetailsFromUrl(mrUrl);
         return {
@@ -185,7 +240,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case ToolName.GetMergeRequestDiscussions: {
+      case 'get_merge_request_discussions': {
         const { mrUrl } = args as { mrUrl: string };
         const result = await gitlabMcp.getMergeRequestDiscussionsFromUrl(mrUrl);
         return {
@@ -198,7 +253,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case ToolName.GetFileContent: {
+      case 'get_file_content': {
         const { mrUrl, filePath, sha } = args as { mrUrl: string; filePath: string; sha: string };
         const result = await gitlabMcp.getFileContentFromMrUrl(mrUrl, filePath, sha);
         return {
@@ -211,7 +266,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case ToolName.AddCommentToMergeRequest: {
+      case 'add_comment_to_merge_request': {
         const { mrUrl, commentBody, discussionId, position } = args as {
           mrUrl: string;
           commentBody: string;
@@ -234,8 +289,9 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case ToolName.ListProjects: {
-        const result = await gitlabMcp.listProjects();
+      case 'list_merge_requests': {
+        const { projectPath } = args as { projectPath: string };
+        const result = await gitlabMcp.listMergeRequests(projectPath);
         return {
           content: [
             {
@@ -246,9 +302,70 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case ToolName.ListMergeRequests: {
-        const { projectPath } = args as { projectPath: string };
-        const result = await gitlabMcp.listMergeRequests(projectPath);
+      case 'assign_reviewers_to_merge_request': {
+        const { mrUrl, reviewerIds } = args as {
+          mrUrl: string;
+          reviewerIds: number[];
+        };
+        const result = await gitlabMcp.assignReviewersToMergeRequestFromUrl(
+          mrUrl,
+          reviewerIds
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Reviewers assigned successfully: ${JSON.stringify(
+                result
+              )}`,
+            },
+          ],
+        };
+      }
+
+      case 'list_project_members': {
+        const { mrUrl } = args as { mrUrl: string };
+        const result = await gitlabMcp.listProjectMembersFromMrUrl(mrUrl);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'list_project_members_by_project_name': {
+        const { projectName } = args as { projectName: string };
+        const result = await gitlabMcp.listProjectMembersByProjectName(
+          projectName
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'list_projects_by_name': {
+        const { projectName } = args as { projectName: string };
+        const result = await gitlabMcp.filterProjectsByName(projectName);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'list_all_projects': {
+        const result = await gitlabMcp.listProjects();
         return {
           content: [
             {
