@@ -3,8 +3,10 @@ import { JiraConfig, JiraTicket, JiraComment } from './jira';
 
 export class JiraService {
   private client: Version3Client;
+  private config: JiraConfig;
 
   constructor(config: JiraConfig) {
+    this.config = config;
     this.client = new Version3Client({
       host: config.apiBaseUrl,
       authentication: {
@@ -78,6 +80,29 @@ export class JiraService {
       console.log(`Labels added to Jira ticket ${ticketId} successfully.`);
     } catch (error) {
       console.error(`Error adding labels to Jira ticket ${ticketId}:`, error);
+      throw error;
+    }
+  }
+
+  async searchTicketsByJQL(jql: string): Promise<JiraTicket[]> {
+    try {
+      const searchResults = await this.client.issueSearch.searchForIssuesUsingJqlEnhancedSearch({ jql });
+
+      return (
+        searchResults.issues?.map((issue: any) => ({
+          id: issue.id,
+          key: issue.key,
+          summary: issue.fields.summary ?? '',
+          description: issue.fields.description?.content
+            ?.map((block: any) =>
+              block.content?.map((item: any) => item.text).join('')
+            )
+            .join('\n'),
+          status: issue.fields.status.name ?? '',
+        })) || []
+      );
+    } catch (error) {
+      console.error(`Error searching Jira tickets with JQL: ${jql}:`, error);
       throw error;
     }
   }

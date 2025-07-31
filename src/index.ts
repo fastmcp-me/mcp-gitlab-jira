@@ -224,7 +224,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'gitlab_get_releases',
+    name: 'gitlab_list_all_releases',
     description: 'Fetches releases for a given GitLab project.',
     inputSchema: {
       type: 'object',
@@ -238,7 +238,7 @@ const tools: Tool[] = [
     },
   },
   {
-    name: 'gitlab_get_releases_since_version',
+    name: 'gitlab_list_releases_since_version',
     description: 'Filters releases for a given GitLab project since a specific version.',
     inputSchema: {
       type: 'object',
@@ -335,6 +335,20 @@ const tools: Tool[] = [
         },
       },
       required: ['ticketId', 'labels'],
+    },
+  },
+  {
+    name: 'jira_search_tickets_by_jql',
+    description: 'Searches for Jira tickets using a JQL (Jira Query Language) string.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        jql: {
+          type: 'string',
+          description: 'The JQL query string.',
+        },
+      },
+      required: ['jql'],
     },
   },
 ];
@@ -512,7 +526,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'gitlab_get_releases': {
+      case 'gitlab_list_all_releases': {
         const { projectPath } = args as { projectPath: string };
         const result = await gitlabService.getReleases(projectPath);
         return {
@@ -525,7 +539,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
         };
       }
 
-      case 'gitlab_get_releases_since_version': {
+      case 'gitlab_list_releases_since_version': {
         const { projectName, sinceVersion } = args as { projectName: string; sinceVersion: string };
         const projects = await gitlabService.filterProjectsByName(projectName);
         if (projects.length === 0) {
@@ -622,6 +636,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request: CallToolRequest)
             {
               type: 'text',
               text: `Labels ${labels.join(', ')} added to Jira ticket ${ticketId} successfully.`,
+            },
+          ],
+        };
+      }
+
+      case 'jira_search_tickets_by_jql': {
+        if (!jiraService) {
+          throw new Error('Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.');
+        }
+        const { jql } = args as { jql: string };
+        const result = await jiraService.searchTicketsByJQL(jql);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(result, null, 2),
             },
           ],
         };
