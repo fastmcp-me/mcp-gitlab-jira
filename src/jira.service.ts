@@ -86,7 +86,7 @@ export class JiraService {
 
   async searchTicketsByJQL(jql: string): Promise<JiraTicket[]> {
     try {
-      const searchResults = await this.client.issueSearch.searchForIssuesUsingJqlEnhancedSearch({ jql });
+      const searchResults = await this.client.issueSearch.searchForIssuesUsingJql({ jql });
 
       return (
         searchResults.issues?.map((issue: any) => ({
