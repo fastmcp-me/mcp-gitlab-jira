@@ -1,5 +1,5 @@
 import { Version3Client } from 'jira.js';
-import { levenshteinDistance } from './utils';
+import { levenshteinDistance } from './utils.js';
 import {
   JiraConfig,
   JiraTicket,

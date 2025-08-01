@@ -100,6 +100,7 @@ Create or update your MCP configuration file (usually `~/.mcp/config.json` or si
 - `jira_create_ticket`: Creates a new Jira ticket with given fields.
 - `jira_get_available_transitions`: Fetches available transitions for a Jira ticket.
 - `jira_update_ticket`: Updates a Jira ticket summary, description, labels.
+- `jira_update_custom_fields`: Updates custom fields on a Jira ticket.
 - `jira_transition_ticket`: Transitions a Jira ticket to a new status.
 
 ## Troubleshooting
