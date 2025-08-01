@@ -300,7 +300,7 @@ const allTools: Tool[] = [
       properties: {
         ticketId: {
           type: 'string',
-          description: 'The ID of the Jira ticket (e.g., "ALICE-123").',
+          description: 'The ID of the Jira ticket (e.g., "JIRA-123").',
         },
       },
       required: ['ticketId'],
@@ -375,7 +375,7 @@ const allTools: Tool[] = [
       properties: {
         ticketId: {
           type: 'string',
-          description: 'The ID of the Jira ticket (e.g., "ALICE-123").',
+          description: 'The ID of the Jira ticket (e.g., "JIRA-123").',
         },
       },
       required: ['ticketId'],

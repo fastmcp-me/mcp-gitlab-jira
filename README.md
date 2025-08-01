@@ -26,11 +26,9 @@ A Model Context Protocol (MCP) server for GitLab and Jira integration. This serv
 
 ### Installation
 
-1. **Clone and build the project:**
+1. **Install the package globally:**
    ```bash
-   cd mcp-gitlab-jira
-   npm install
-   npm run build
+   npm i -g mcp-gitlab-jira
    ```
 
 2. **Set up environment variables:**
@@ -45,19 +43,10 @@ A Model Context Protocol (MCP) server for GitLab and Jira integration. This serv
    export ATLASSIAN_API_TOKEN="your-jira-api-token"
    ```
 
-3. **Install globally (optional but recommended)**:
+3. **Test the server manually**:
    ```bash
-   npm link
-   ```
-   This allows you to use `mcp-gitlab-jira` command from anywhere.
-
-4. **Test the server manually**:
-   ```bash
-   # Test that the server starts without errors (if globally linked)
-   echo '''{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}''' | mcp-gitlab-jira
-
-   # Or test directly
-   node dist/index.js
+   # Test that the server starts without errors
+   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}' | mcp-gitlab-jira
    ```
    The server should start and log "GitLab/Jira MCP server started" to stderr.
 
@@ -117,7 +106,7 @@ Create or update your MCP configuration file (usually `~/.mcp/config.json` or si
 
 ### Common Issues
 
-1. **"Cannot find module" errors**: Make sure you've run `npm install` and `npm run build`
+1. **"Cannot find module" errors**: If you are developing locally, make sure you've run `npm install` and `npm run build`.
 2. **Authentication errors**: Verify your `GITLAB_ACCESS_TOKEN`, `ATLASSIAN_USER_EMAIL`, and `ATLASSIAN_API_TOKEN` have the necessary permissions.
 3. **Connection errors**: Ensure your `GITLAB_URL` and `ATLASSIAN_SITE_NAME` are correct and accessible.
 4. **Server not responding**: Check that the MCP server process is running and the path in your config is correct.
@@ -132,10 +121,17 @@ export GITLAB_ACCESS_TOKEN="your-token"
 export ATLASSIAN_SITE_NAME="your-atlassian-site-name"
 export ATLASSIAN_USER_EMAIL="your-email@example.com"
 export ATLASSIAN_API_TOKEN="your-jira-api-token"
-node dist/index.js
+mcp-gitlab-jira
 ```
 
 ## Development
+
+For development, clone the repository and install the dependencies.
+
+```bash
+npm install
+npm run build
+```
 
 ### Project Structure
 
