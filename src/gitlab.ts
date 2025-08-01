@@ -157,8 +157,13 @@ export interface GitLabUser {
   web_url: string;
 }
 
-export function parseGitLabMergeRequestUrl(url: string): { projectId: number; mrIid: number } {
-  const match = url.match(/\/(?<projectId>[^/]+)\/(?:-\/)?merge_requests\/(?<mrIid>\d+)$/);
+export function parseGitLabMergeRequestUrl(url: string): {
+  projectId: number;
+  mrIid: number;
+} {
+  const match = url.match(
+    /\/(?<projectId>[^/]+)\/(?:-\/)?merge_requests\/(?<mrIid>\d+)$/,
+  );
   if (!match || !match.groups) {
     throw new Error(`Invalid GitLab Merge Request URL: ${url}`);
   }

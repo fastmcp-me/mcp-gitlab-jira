@@ -35,3 +35,12 @@ export interface JiraTransition {
     name: string;
   };
 }
+
+export interface JiraTicketUpdatePayload {
+  summary?: string;
+  labels?: string[];
+}
+
+export interface JiraTicketTransitionPayload {
+  transitionId: string;
+}

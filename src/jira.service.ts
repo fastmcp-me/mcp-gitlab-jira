@@ -1,5 +1,5 @@
 import { Version3Client } from 'jira.js';
-import { JiraConfig, JiraTicket, JiraComment, JiraTransition } from './jira';
+import { JiraConfig, JiraTicket, JiraComment, JiraTransition, JiraTicketUpdatePayload } from './jira';
 
 export class JiraService {
   private client: Version3Client;
@@ -30,13 +30,16 @@ export class JiraService {
         summary: issue.fields.summary ?? '',
         description: issue.fields.description?.content
           ?.map((block: any) =>
-            block.content?.map((item: any) => item.text).join('')
+            block.content?.map((item: any) => item.text).join(''),
           )
           .join('\n'),
         status: issue.fields.status.name ?? '',
       };
     } catch (error) {
-      console.error(`Error fetching Jira ticket details for ${ticketId}:`, error);
+      console.error(
+        `Error fetching Jira ticket details for ${ticketId}:`,
+        error,
+      );
       throw error;
     }
   }
@@ -56,7 +59,7 @@ export class JiraService {
           },
           body: comment.body.content
             ?.map((block: any) =>
-              block.content?.map((item: any) => item.text).join('')
+              block.content?.map((item: any) => item.text).join(''),
             )
             .join('\n'),
           created: comment.created,
@@ -64,29 +67,70 @@ export class JiraService {
         })) || []
       );
     } catch (error) {
-      console.error(`Error fetching Jira ticket comments for ${ticketId}:`, error);
+      console.error(
+        `Error fetching Jira ticket comments for ${ticketId}:`,
+        error,
+      );
       throw error;
     }
   }
 
-  async addLabelsToTicket(ticketId: string, labels: string[]): Promise<void> {
+  async updateTicket(
+    ticketId: string,
+  payload: JiraTicketUpdatePayload,
+  ): Promise<void> {
     try {
+      const update: any = {};
+      if (payload.summary) {
+        update.summary = [{ set: payload.summary }];
+      }
+      if (payload.labels) {
+        update.labels = [{ set: payload.labels }];
+      }
+      if ((payload as any).description) {
+        update.description = [{ set: (payload as any).description }];
+      }
+
       await this.client.issues.editIssue({
         issueIdOrKey: ticketId,
-        update: {
-          labels: [{ set: labels }],
+        update,
+      });
+      console.log(`Jira ticket ${ticketId} updated successfully.`);
+    } catch (error) {
+      console.error(`Error updating Jira ticket ${ticketId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Adds a comment to a Jira ticket.
+   */
+  async addCommentToTicket(ticketId: string, comment: string): Promise<void> {
+    try {
+      await this.client.issueComments.addComment({
+        issueIdOrKey: ticketId,
+        comment: {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: comment }],
+            },
+          ],
         },
       });
-      console.log(`Labels added to Jira ticket ${ticketId} successfully.`);
+      console.log(`Comment added to Jira ticket ${ticketId}.`);
     } catch (error) {
-      console.error(`Error adding labels to Jira ticket ${ticketId}:`, error);
+      console.error(`Error adding comment to Jira ticket ${ticketId}:`, error);
       throw error;
     }
   }
 
   async searchTicketsByJQL(jql: string): Promise<JiraTicket[]> {
     try {
-      const searchResults = await this.client.issueSearch.searchForIssuesUsingJql({ jql });
+      const searchResults =
+        await this.client.issueSearch.searchForIssuesUsingJql({ jql });
 
       return (
         searchResults.issues?.map((issue: any) => ({
@@ -95,7 +139,7 @@ export class JiraService {
           summary: issue.fields.summary ?? '',
           description: issue.fields.description?.content
             ?.map((block: any) =>
-              block.content?.map((item: any) => item.text).join('')
+              block.content?.map((item: any) => item.text).join(''),
             )
             .join('\n'),
           status: issue.fields.status.name ?? '',
@@ -108,16 +152,35 @@ export class JiraService {
   }
 
   /**
-   * Creates a new Jira ticket with the given createIssue parameters.
-   * @param params The createIssue parameters for Jira API (must include fields object).
-   */
-  /**
    * Creates a new Jira ticket using the provided parameters.
    * @param params The createIssue parameters for Jira API.
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async createTicket(params: any): Promise<void> {
     try {
+      if (params.fields) {
+        // Jira's description field expects Atlassian Document Format (ADF).
+        // If a plain string is provided, or if it's missing, convert it to the ADF structure.
+        if (
+          typeof params.fields.description === 'string' ||
+          !params.fields.description
+        ) {
+          const descriptionText =
+            params.fields.description ||
+            params.fields.summary ||
+            'not provided by agent';
+          params.fields.description = {
+            type: 'doc',
+            version: 1,
+            content: [
+              {
+                type: 'paragraph',
+                content: [{ type: 'text', text: descriptionText }],
+              },
+            ],
+          };
+        }
+      }
       await this.client.issues.createIssue(params);
       console.log('Jira ticket created successfully.');
     } catch (error) {
@@ -128,9 +191,12 @@ export class JiraService {
 
   async getAvailableTransitions(ticketId: string): Promise<JiraTransition[]> {
     try {
-      const transitions = await this.client.issues.getTransitions({ issueIdOrKey: ticketId });
+      const transitions = await this.client.issues.getTransitions({
+        issueIdOrKey: ticketId,
+      });
       return (
-        transitions.transitions?.filter((transition) => transition.id && transition.name)
+        transitions.transitions
+          ?.filter((transition) => transition.id && transition.name)
           .map((transition) => ({
             id: transition.id!,
             name: transition.name!,
@@ -140,7 +206,30 @@ export class JiraService {
           })) || []
       );
     } catch (error) {
-      console.error(`Error fetching available transitions for Jira ticket ${ticketId}:`, error);
+      console.error(
+        `Error fetching available transitions for Jira ticket ${ticketId}:`,
+        error,
+      );
+      throw error;
+    }
+  }
+
+  async transitionTicket(
+    ticketId: string,
+    transitionId: string,
+  ): Promise<void> {
+    try {
+      await this.client.issues.doTransition({
+        issueIdOrKey: ticketId,
+        transition: {
+          id: transitionId,
+        },
+      });
+      console.log(
+        `Jira ticket ${ticketId} transitioned successfully with transition ID ${transitionId}.`,
+      );
+    } catch (error) {
+      console.error(`Error transitioning Jira ticket ${ticketId}:`, error);
       throw error;
     }
   }
