@@ -21,31 +21,23 @@ import {
 const gitlabUrl = process.env.GITLAB_URL;
 const gitlabAccessToken = process.env.GITLAB_ACCESS_TOKEN;
 
-if (!gitlabUrl || !gitlabAccessToken) {
-  console.error(
-    'Error: GITLAB_URL and GITLAB_ACCESS_TOKEN environment variables must be set.',
+let gitlabService: GitLabService | undefined;
+if (gitlabUrl && gitlabAccessToken) {
+  const gitlabConfig: GitLabConfig = {
+    url: gitlabUrl,
+    accessToken: gitlabAccessToken,
+  };
+  gitlabService = new GitLabService(gitlabConfig);
+} else {
+  console.warn(
+    'Warning: GITLAB_URL and GITLAB_ACCESS_TOKEN environment variables are not set. GitLab tools will be unavailable.',
   );
-  process.exit(1);
 }
-
-const gitlabConfig: GitLabConfig = {
-  url: gitlabUrl,
-  accessToken: gitlabAccessToken,
-};
-
-const gitlabService = new GitLabService(gitlabConfig);
 
 // Load Jira configuration from environment variables
 const jiraApiBaseUrl = process.env.ATLASSIAN_SITE_NAME;
 const jiraUserEmail = process.env.ATLASSIAN_USER_EMAIL;
 const jiraApiToken = process.env.ATLASSIAN_API_TOKEN;
-
-if (!jiraApiBaseUrl || !jiraUserEmail || !jiraApiToken) {
-  console.error(
-    'Error: ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables must be set for Jira integration.',
-  );
-  // Do not exit here, as GitLab tools might still be usable
-}
 
 let jiraService: JiraService | undefined;
 if (jiraApiBaseUrl && jiraUserEmail && jiraApiToken) {
@@ -55,11 +47,14 @@ if (jiraApiBaseUrl && jiraUserEmail && jiraApiToken) {
     apiToken: jiraApiToken,
   };
   jiraService = new JiraService(jiraConfig);
+} else {
+  console.warn(
+    'Warning: ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables are not set. Jira tools will be unavailable.',
+  );
 }
 
-// Create the MCP server
-// Define the tools
-const tools: Tool[] = [
+// Define all possible tools
+const allTools: Tool[] = [
   {
     name: 'gitlab_get_merge_request_details',
     description:
@@ -430,15 +425,27 @@ const tools: Tool[] = [
     },
   },
 ];
+
+// Filter tools based on service availability
+const availableTools = allTools.filter((tool) => {
+  if (tool.name.startsWith('gitlab_')) {
+    return !!gitlabService;
+  }
+  if (tool.name.startsWith('jira_')) {
+    return !!jiraService;
+  }
+  return true;
+});
+
 // Initialize the MCP server
 const server = new Server(
-  { name: 'gitlab-mcp-server', version: '1.0.0' },
-  { capabilities: { tools: {} } }
+  { name: 'gitlab-jira-mcp-server', version: '1.0.0' },
+  { capabilities: { tools: {} } },
 );
 
 // Handle tool listing
 server.setRequestHandler(ListToolsRequestSchema, async () => {
-  return { tools };
+  return { tools: availableTools };
 });
 
 // Handle tool calls
@@ -450,6 +457,9 @@ server.setRequestHandler(
     try {
       switch (name) {
         case 'gitlab_get_merge_request_details': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { mrUrl } = args as { mrUrl: string };
           const result =
             await gitlabService.getMergeRequestDetailsFromUrl(mrUrl);
@@ -464,6 +474,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_get_file_content': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { mrUrl, filePath, sha } = args as {
             mrUrl: string;
             filePath: string;
@@ -485,6 +498,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_add_comment_to_merge_request': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { mrUrl, commentBody, discussionId, position } = args as {
             mrUrl: string;
             commentBody: string;
@@ -508,6 +524,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_list_merge_requests': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { projectPath } = args as { projectPath: string };
           const result = await gitlabService.listMergeRequests(projectPath);
           return {
@@ -521,6 +540,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_assign_reviewers_to_merge_request': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { mrUrl, reviewerIds } = args as {
             mrUrl: string;
             reviewerIds: number[];
@@ -543,6 +565,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_list_project_members': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { mrUrl } = args as { mrUrl: string };
           const result = await gitlabService.listProjectMembersFromMrUrl(mrUrl);
           return {
@@ -556,6 +581,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_list_project_members_by_project_name': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { projectName } = args as { projectName: string };
           const result =
             await gitlabService.listProjectMembersByProjectName(projectName);
@@ -570,6 +598,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_list_projects_by_name': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { projectName } = args as { projectName: string };
           const result = await gitlabService.filterProjectsByName(projectName);
           return {
@@ -583,6 +614,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_list_all_projects': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const result = await gitlabService.listProjects();
           return {
             content: [
@@ -595,6 +629,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_list_all_releases': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { projectPath } = args as { projectPath: string };
           const result = await gitlabService.getReleases(projectPath);
           return {
@@ -608,6 +645,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_list_releases_since_version': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { projectName, sinceVersion } = args as {
             projectName: string;
             sinceVersion: string;
@@ -617,7 +657,6 @@ server.setRequestHandler(
           if (projects.length === 0) {
             throw new Error(`No project found with name: ${projectName}`);
           }
-          // Assuming the first project is the desired one, or you might want to add more logic to select the correct project
           const projectPath = projects[0].path_with_namespace;
           const result = await gitlabService.filterReleasesSinceVersion(
             projectPath,
@@ -634,6 +673,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_get_user_id_by_username': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { username } = args as { username: string };
           const userId = await gitlabService.getUserIdByUsername(username);
           return {
@@ -647,6 +689,9 @@ server.setRequestHandler(
         }
 
         case 'gitlab_get_user_activities': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
           const { username, sinceDate } = args as {
             username: string;
             sinceDate?: string;
@@ -659,7 +704,6 @@ server.setRequestHandler(
               new Date(sinceDate),
             );
           } else {
-            // Default to 1 day ago if sinceDate is not provided
             const oneDayAgo = new Date();
             oneDayAgo.setDate(oneDayAgo.getDate() - 1);
             activities = await gitlabService.getUserActivities(
@@ -679,9 +723,7 @@ server.setRequestHandler(
 
         case 'jira_get_jira_ticket_details': {
           if (!jiraService) {
-            throw new Error(
-              'Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.',
-            );
+            throw new Error('Jira service is not initialized.');
           }
           const { ticketId } = args as { ticketId: string };
           const result = await jiraService.getTicketDetails(ticketId);
@@ -697,9 +739,7 @@ server.setRequestHandler(
 
         case 'jira_get_jira_ticket_comments': {
           if (!jiraService) {
-            throw new Error(
-              'Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.',
-            );
+            throw new Error('Jira service is not initialized.');
           }
           const { ticketId } = args as { ticketId: string };
           const result = await jiraService.getTicketComments(ticketId);
@@ -715,9 +755,7 @@ server.setRequestHandler(
 
         case 'jira_add_comment_to_ticket': {
           if (!jiraService) {
-            throw new Error(
-              'Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.',
-            );
+            throw new Error('Jira service is not initialized.');
           }
           const { ticketId, comment } = args as {
             ticketId: string;
@@ -736,9 +774,7 @@ server.setRequestHandler(
 
         case 'jira_search_tickets_by_jql': {
           if (!jiraService) {
-            throw new Error(
-              'Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.',
-            );
+            throw new Error('Jira service is not initialized.');
           }
           const { jql } = args as { jql: string };
           const result = await jiraService.searchTicketsByJQL(jql);
@@ -752,11 +788,25 @@ server.setRequestHandler(
           };
         }
 
+        case 'jira_create_ticket': {
+            if (!jiraService) {
+                throw new Error('Jira service is not initialized.');
+            }
+            const { fields } = args as { fields: any };
+            await jiraService.createTicket(fields);
+            return {
+                content: [
+                    {
+                        type: 'text',
+                        text: 'Jira ticket created successfully.',
+                    },
+                ],
+            };
+        }
+
         case 'jira_get_available_transitions': {
           if (!jiraService) {
-            throw new Error(
-              'Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.',
-            );
+            throw new Error('Jira service is not initialized.');
           }
           const { ticketId } = args as { ticketId: string };
           const result = await jiraService.getAvailableTransitions(ticketId);
@@ -772,9 +822,7 @@ server.setRequestHandler(
 
         case 'jira_update_ticket': {
           if (!jiraService) {
-            throw new Error(
-              'Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.',
-            );
+            throw new Error('Jira service is not initialized.');
           }
           const { ticketId, payload } = args as {
             ticketId: string;
@@ -793,9 +841,7 @@ server.setRequestHandler(
 
         case 'jira_transition_ticket': {
           if (!jiraService) {
-            throw new Error(
-              'Jira service is not initialized. Please set JIRA_API_BASE_URL, JIRA_USER_EMAIL, and JIRA_API_TOKEN environment variables.',
-            );
+            throw new Error('Jira service is not initialized.');
           }
           const { ticketId, payload } = args as {
             ticketId: string;
@@ -827,7 +873,7 @@ server.setRequestHandler(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('GitLab MCP server started');
+  console.error('GitLab/Jira MCP server started');
 }
 
 main().catch((error) => {
