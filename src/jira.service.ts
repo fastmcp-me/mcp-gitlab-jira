@@ -1,9 +1,17 @@
 import { Version3Client } from 'jira.js';
-import { JiraConfig, JiraTicket, JiraComment, JiraTransition, JiraTicketUpdatePayload } from './jira';
+import {
+  JiraConfig,
+  JiraTicket,
+  JiraComment,
+  JiraTransition,
+  JiraTicketUpdatePayload,
+  JiraField,
+} from './jira';
 
 export class JiraService {
   private client: Version3Client;
   private config: JiraConfig;
+  private storyPointsFieldId: string | undefined;
 
   constructor(config: JiraConfig) {
     this.config = config;
@@ -18,23 +26,15 @@ export class JiraService {
     });
   }
 
+  
+
   async getTicketDetails(ticketId: string): Promise<JiraTicket> {
     try {
       const issue = await this.client.issues.getIssue({
         issueIdOrKey: ticketId,
       });
 
-      return {
-        id: issue.id,
-        key: issue.key,
-        summary: issue.fields.summary ?? '',
-        description: issue.fields.description?.content
-          ?.map((block: any) =>
-            block.content?.map((item: any) => item.text).join(''),
-          )
-          .join('\n'),
-        status: issue.fields.status.name ?? '',
-      };
+      return issue.fields as JiraTicket;
     } catch (error) {
       console.error(
         `Error fetching Jira ticket details for ${ticketId}:`,
@@ -75,25 +75,44 @@ export class JiraService {
     }
   }
 
+  private async getFieldId(fieldName: string): Promise<string> {
+    const allFields = await this.getAllFields();
+    const normalizedFieldName = fieldName
+      .toLowerCase()
+      .trim()
+      .replace(/\s+|_|-/g, ' ');
+
+    const foundField = allFields.find(
+      (field) =>
+        field.name
+          .toLowerCase()
+          .trim()
+          .replace(/\s+|_|-/g, ' ') === normalizedFieldName,
+    );
+
+    if (!foundField) {
+      throw new Error(`Could not find a field named "${fieldName}" in Jira.`);
+    }
+    return foundField.id;
+  }
+
   async updateTicket(
     ticketId: string,
-  payload: JiraTicketUpdatePayload,
+    payload: JiraTicketUpdatePayload,
   ): Promise<void> {
     try {
-      const update: any = {};
-      if (payload.summary) {
-        update.summary = [{ set: payload.summary }];
-      }
-      if (payload.labels) {
-        update.labels = [{ set: payload.labels }];
-      }
-      if ((payload as any).description) {
-        update.description = [{ set: (payload as any).description }];
+      const fields: { [key: string]: any } = {};
+
+      for (const key in payload) {
+        if (Object.prototype.hasOwnProperty.call(payload, key)) {
+          const fieldId = await this.getFieldId(key);
+          fields[fieldId] = payload[key];
+        }
       }
 
       await this.client.issues.editIssue({
         issueIdOrKey: ticketId,
-        update,
+        fields,
       });
       console.log(`Jira ticket ${ticketId} updated successfully.`);
     } catch (error) {
@@ -230,6 +249,16 @@ export class JiraService {
       );
     } catch (error) {
       console.error(`Error transitioning Jira ticket ${ticketId}:`, error);
+      throw error;
+    }
+  }
+
+  async getAllFields(): Promise<JiraField[]> {
+    try {
+      const fields = await this.client.issueFields.getFields();
+      return fields as JiraField[];
+    } catch (error) {
+      console.error('Error fetching Jira fields:', error);
       throw error;
     }
   }

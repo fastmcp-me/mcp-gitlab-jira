@@ -393,11 +393,7 @@ const allTools: Tool[] = [
         },
         payload: {
           type: 'object',
-          description: 'An object containing fields to update (e.g., summary, labels).',
-          properties: {
-            summary: { type: 'string', description: 'The new summary for the ticket.' },
-            labels: { type: 'array', items: { type: 'string' }, description: 'The labels to set on the ticket.' },
-          },
+          description: 'An object containing the fields to update. The keys of the object are the field names, and the values are the new values.',
         },
       },
       required: ['ticketId', 'payload'],
@@ -422,6 +418,14 @@ const allTools: Tool[] = [
         },
       },
       required: ['ticketId', 'payload'],
+    },
+  },
+  {
+    name: 'jira_get_all_fields',
+    description: 'Fetches the list of all fields from Jira.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
     },
   },
 ];
@@ -853,6 +857,21 @@ server.setRequestHandler(
               {
                 type: 'text',
                 text: `Ticket ${ticketId} transitioned successfully.`,
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_all_fields': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const result = await jiraService.getAllFields();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
               },
             ],
           };

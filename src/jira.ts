@@ -9,12 +9,8 @@ export interface JiraConfig {
 }
 
 export interface JiraTicket {
-  id: string;
-  key: string;
-  summary: string;
-  description?: string;
-  status: string;
-  // Add other relevant fields as needed
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  [key: string]: any;
 }
 
 export interface JiraComment {
@@ -37,10 +33,24 @@ export interface JiraTransition {
 }
 
 export interface JiraTicketUpdatePayload {
-  summary?: string;
-  labels?: string[];
+  [key: string]: any;
 }
 
 export interface JiraTicketTransitionPayload {
   transitionId: string;
+}
+
+export interface JiraField {
+  id: string;
+  name: string;
+  custom: boolean;
+  orderable: boolean;
+  navigable: boolean;
+  searchable: boolean;
+  clauseNames: string[];
+  schema: {
+    type: string;
+    custom?: string;
+    customId?: number;
+  };
 }
