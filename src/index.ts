@@ -15,6 +15,7 @@ import {
   JiraConfig,
   JiraTicketUpdatePayload,
   JiraTicketTransitionPayload,
+  JiraCustomFieldUpdatePayload,
 } from './jira.js';
 
 // Load GitLab configuration from environment variables
@@ -383,7 +384,7 @@ const allTools: Tool[] = [
   },
   {
     name: 'jira_update_ticket',
-    description: 'Updates a Jira ticket summary, description, labels.',
+    description: 'Updates a Jira ticket with standard fields like summary, description, labels, and story points.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -393,7 +394,36 @@ const allTools: Tool[] = [
         },
         payload: {
           type: 'object',
-          description: 'An object containing the fields to update. The keys of the object are the field names, and the values are the new values.',
+          description: 'An object containing the fields to update.',
+          properties: {
+            summary: { type: 'string', description: 'The new summary for the ticket.' },
+            description: { type: 'string', description: 'The new description for the ticket.' },
+            labels: { type: 'array', items: { type: 'string' }, description: 'The labels to set on the ticket.' },
+            assigneeAccountId: { type: 'string', description: 'The account ID of the new assignee.' },
+            reporterAccountId: { type: 'string', description: 'The account ID of the new reporter.' },
+            priorityId: { type: 'string', description: 'The ID of the new priority.' },
+            fixVersions: { type: 'array', items: { type: 'string' }, description: 'The names of the fix versions.' },
+            components: { type: 'array', items: { type: 'string' }, description: 'The names of the components.' },
+            duedate: { type: 'string', description: 'The new due date in YYYY-MM-DD format.' },
+          },
+        },
+      },
+      required: ['ticketId', 'payload'],
+    },
+  },
+  {
+    name: 'jira_update_custom_fields',
+    description: 'Updates custom fields on a Jira ticket.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID or key of the Jira ticket to update.',
+        },
+        payload: {
+          type: 'object',
+          description: 'An object containing the custom fields to update. The keys of the object are the field names, and the values are the new values.',
         },
       },
       required: ['ticketId', 'payload'],
@@ -838,6 +868,25 @@ server.setRequestHandler(
               {
                 type: 'text',
                 text: `Ticket ${ticketId} updated successfully.`,
+              },
+            ],
+          };
+        }
+
+        case 'jira_update_custom_fields': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { ticketId, payload } = args as {
+            ticketId: string;
+            payload: JiraCustomFieldUpdatePayload;
+          };
+          await jiraService.updateCustomFields(ticketId, payload);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Custom fields for ticket ${ticketId} updated successfully.`,
               },
             ],
           };

@@ -8,7 +8,8 @@
     "mcp-gitlab-jira": "dist/index.js"
   },
   "scripts": {
-    "build": "tsc -p src",
+    "build": "tsc",
+    "test": "jest",
     "start": "node dist/index.js",
     "lint": "eslint src/**/*.ts",
     "format": "prettier --write \"src/**/*.ts\""
@@ -27,14 +28,17 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
+    "@types/jest": "^30.0.0",
     "@types/node": "^20.0.0",
     "@types/semver": "^7.7.0",
     "@typescript-eslint/eslint-plugin": "^8.38.0",
     "@typescript-eslint/parser": "^8.38.0",
     "eslint": "^9.32.0",
     "globals": "^16.3.0",
+    "jest": "^30.0.5",
     "prettier": "^3.6.2",
     "semver": "^7.7.2",
+    "ts-jest": "^29.4.0",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.38.0"
   }

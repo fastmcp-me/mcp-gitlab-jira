@@ -33,6 +33,18 @@ export interface JiraTransition {
 }
 
 export interface JiraTicketUpdatePayload {
+  summary?: string;
+  description?: string;
+  labels?: string[];
+  assigneeAccountId?: string;
+  reporterAccountId?: string;
+  priorityId?: string;
+  fixVersions?: string[];
+  components?: string[];
+  duedate?: string; // YYYY-MM-DD
+}
+
+export interface JiraCustomFieldUpdatePayload {
   [key: string]: any;
 }
 

@@ -1,4 +1,4 @@
-import { Version3Client } from 'jira.js';
+import { levenshteinDistance } from './utils';
 import {
   JiraConfig,
   JiraTicket,
@@ -6,12 +6,14 @@ import {
   JiraTransition,
   JiraTicketUpdatePayload,
   JiraField,
+  JiraCustomFieldUpdatePayload,
 } from './jira';
 
 export class JiraService {
   private client: Version3Client;
   private config: JiraConfig;
   private storyPointsFieldId: string | undefined;
+  private allFieldsCache: JiraField[] | undefined;
 
   constructor(config: JiraConfig) {
     this.config = config;
@@ -75,6 +77,39 @@ export class JiraService {
     }
   }
 
+  private async getStoryPointsFieldId(): Promise<string> {
+    if (this.storyPointsFieldId) {
+      return this.storyPointsFieldId;
+    }
+
+    try {
+      const fields = await this.getAllFields();
+      const storyPointsField = fields.find(
+        (field) =>
+          field.name
+            ?.toLowerCase()
+            .trim()
+            .replaceAll(' ', '')
+            .replaceAll('_', '')
+            .replaceAll('-', '') === 'storypoints',
+      );
+
+      if (!storyPointsField || !storyPointsField.id) {
+        throw new Error(
+          'Could not find the Story Points field for this Jira instance.',
+        );
+      }
+
+      this.storyPointsFieldId = storyPointsField.id;
+      return this.storyPointsFieldId;
+    } catch (error) {
+      console.error('Error fetching Jira fields:', error);
+      throw new Error('Could not retrieve custom field ID for Story Points.');
+    }
+  }
+
+  
+
   private async getFieldId(fieldName: string): Promise<string> {
     const allFields = await this.getAllFields();
     const normalizedFieldName = fieldName
@@ -82,23 +117,91 @@ export class JiraService {
       .trim()
       .replace(/\s+|_|-/g, ' ');
 
-    const foundField = allFields.find(
-      (field) =>
-        field.name
+    const rankedFields = allFields
+      .map((field) => {
+        const normalizedCandidateName = field.name
           .toLowerCase()
           .trim()
-          .replace(/\s+|_|-/g, ' ') === normalizedFieldName,
-    );
+          .replace(/\s+|_|-/g, ' ');
+        const distance = levenshteinDistance(
+          normalizedFieldName,
+          normalizedCandidateName,
+        );
+        return { field, distance };
+      })
+      .sort((a, b) => a.distance - b.distance);
 
-    if (!foundField) {
+    if (rankedFields.length === 0) {
+      throw new Error('No fields found in Jira.');
+    }
+
+    const bestMatch = rankedFields[0];
+
+    if (!bestMatch.field.id) {
       throw new Error(`Could not find a field named "${fieldName}" in Jira.`);
     }
-    return foundField.id;
+
+    return bestMatch.field.id;
   }
 
   async updateTicket(
     ticketId: string,
     payload: JiraTicketUpdatePayload,
+  ): Promise<void> {
+    try {
+      const fields: { [key: string]: any } = {};
+
+      if (payload.summary) {
+        fields.summary = payload.summary;
+      }
+      if (payload.labels) {
+        fields.labels = payload.labels;
+      }
+      if (payload.description) {
+        fields.description = {
+          type: 'doc',
+          version: 1,
+          content: [
+            {
+              type: 'paragraph',
+              content: [{ type: 'text', text: payload.description }],
+            },
+          ],
+        };
+      }
+      if (payload.assigneeAccountId) {
+        fields.assignee = { accountId: payload.assigneeAccountId };
+      }
+      if (payload.reporterAccountId) {
+        fields.reporter = { accountId: payload.reporterAccountId };
+      }
+      if (payload.priorityId) {
+        fields.priority = { id: payload.priorityId };
+      }
+      if (payload.fixVersions) {
+        fields.fixVersions = payload.fixVersions.map((v) => ({ name: v }));
+      }
+      if (payload.components) {
+        fields.components = payload.components.map((c) => ({ name: c }));
+      }
+      if (payload.duedate) {
+        fields.duedate = payload.duedate;
+      }
+
+      await this.client.issues.editIssue({
+        issueIdOrKey: ticketId,
+        fields,
+      });
+      console.log(`Jira ticket ${ticketId} updated successfully.`);
+    } catch (error) {
+      console.error(`Error updating Jira ticket ${ticketId}:`, error);
+      throw error;
+    }
+  }
+
+  async updateCustomFields(
+    ticketId: string,
+    payload: JiraCustomFieldUpdatePayload,
   ): Promise<void> {
     try {
       const fields: { [key: string]: any } = {};
@@ -114,9 +217,9 @@ export class JiraService {
         issueIdOrKey: ticketId,
         fields,
       });
-      console.log(`Jira ticket ${ticketId} updated successfully.`);
+      console.log(`Jira ticket ${ticketId} custom fields updated successfully.`);
     } catch (error) {
-      console.error(`Error updating Jira ticket ${ticketId}:`, error);
+      console.error(`Error updating Jira ticket custom fields ${ticketId}:`, error);
       throw error;
     }
   }
@@ -254,9 +357,14 @@ export class JiraService {
   }
 
   async getAllFields(): Promise<JiraField[]> {
+    if (this.allFieldsCache) {
+      return this.allFieldsCache;
+    }
+
     try {
       const fields = await this.client.issueFields.getFields();
-      return fields as JiraField[];
+      this.allFieldsCache = fields as JiraField[];
+      return this.allFieldsCache;
     } catch (error) {
       console.error('Error fetching Jira fields:', error);
       throw error;
