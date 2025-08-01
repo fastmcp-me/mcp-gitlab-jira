@@ -4,49 +4,62 @@ A Model Context Protocol (MCP) server for GitLab and Jira integration. This serv
 
 ## Features
 
-- **List Projects**: Get all accessible GitLab projects
-- **List Merge Requests**: Get merge requests for a specific project
-- **Get Merge Request Details**: Fetch comprehensive details including diffs, discussions, and existing feedback
-- **Add Comments**: Add comments to merge requests (general, replies, or inline comments)
+### GitLab
+- **Projects**: List all accessible projects or filter them by name.
+- **Merge Requests**: List merge requests for a project, get detailed information (including diffs), add comments, and assign reviewers.
+- **Files**: Get the content of a specific file at a given SHA.
+- **Releases**: List all releases for a project or filter them since a specific version.
+- **Users**: List project members, get a user's ID by username, and get user activities.
+
+### Jira
+- **Tickets**: Get detailed information about a ticket, get comments, add comments, search for tickets using JQL, create new tickets, get available transitions, update tickets, and transition tickets to a new status.
 
 ## Setup
 
 ### Prerequisites
 
-- Node.js 18+ 
+- Node.js 18+
 - GitLab Personal Access Token with API access
+- Jira API Token
 - Access to a GitLab instance (on-premise or GitLab.com)
+- Access to a Jira instance
 
 ### Installation
 
 1. **Clone and build the project:**
    ```bash
-   cd mcp-gitlab-cli
+   cd mcp-gitlab-jira
    npm install
    npm run build
    ```
 
 2. **Set up environment variables:**
    ```bash
+   # GitLab
    export GITLAB_URL="https://your-gitlab-instance.com"
    export GITLAB_ACCESS_TOKEN="your-personal-access-token"
+
+   # Jira
+   export ATLASSIAN_SITE_NAME="your-atlassian-site-name"
+   export ATLASSIAN_USER_EMAIL="your-email@example.com"
+   export ATLASSIAN_API_TOKEN="your-jira-api-token"
    ```
 
 3. **Install globally (optional but recommended)**:
    ```bash
    npm link
    ```
-   This allows you to use `mcp-gitlab` command from anywhere.
+   This allows you to use `mcp-gitlab-jira` command from anywhere.
 
 4. **Test the server manually**:
    ```bash
    # Test that the server starts without errors (if globally linked)
-   echo '{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}' | mcp-gitlab
-   
+   echo '''{"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}''' | mcp-gitlab-jira
+
    # Or test directly
    node dist/index.js
    ```
-   The server should start and log "GitLab MCP server started" to stderr.
+   The server should start and log "GitLab/Jira MCP server started" to stderr.
 
 ### Using with MCP Clients
 
@@ -54,101 +67,60 @@ A Model Context Protocol (MCP) server for GitLab and Jira integration. This serv
 
 Create or update your MCP configuration file (usually `~/.mcp/config.json` or similar):
 
-**Option 1: Using globally linked command (recommended)**:
 ```json
 {
   "mcpServers": {
-    "gitlab-mcp": {
-      "command": "mcp-gitlab",
+    "gitlab-jira-mcp": {
+      "command": "mcp-gitlab-jira",
       "env": {
         "GITLAB_URL": "https://your-gitlab-instance.com",
-        "GITLAB_ACCESS_TOKEN": "your-personal-access-token"
+        "GITLAB_ACCESS_TOKEN": "your-personal-access-token",
+        "ATLASSIAN_SITE_NAME": "your-atlassian-site-name",
+        "ATLASSIAN_USER_EMAIL": "your-email@example.com",
+        "ATLASSIAN_API_TOKEN": "your-jira-api-token"
       }
     }
   }
 }
-```
-
-**Option 2: Using absolute path**:
-```json
-{
-  "mcpServers": {
-    "gitlab-mcp": {
-      "command": "node",
-      "args": ["/absolute/path/to/mcp-gitlab-cli/dist/index.js"],
-      "env": {
-        "GITLAB_URL": "https://your-gitlab-instance.com",
-        "GITLAB_ACCESS_TOKEN": "your-personal-access-token"
-      }
-    }
-  }
-}
-```
-
-#### Example with gemini-cli
-
-Once configured, you can use the GitLab tools in gemini-cli:
-
-```bash
-# Start gemini-cli with MCP servers
-gemini-cli --mcp-config ~/.mcp/config.json
-
-# Then you can ask questions like:
-# "List all my GitLab projects"
-# "Show me the merge requests for project ID 123"
-# "Get details for merge request 45 in project 123"
-# "Add a comment to merge request 45 saying 'LGTM'"
 ```
 
 ## Available Tools
 
-### 1. `list_projects`
-Lists all accessible GitLab projects.
+### GitLab Tools
 
-**Parameters**: None
+- `gitlab_get_merge_request_details`: Fetches detailed information about a GitLab Merge Request, including file diffs.
+- `gitlab_get_file_content`: Fetches the content of a specific file at a given SHA in a GitLab project.
+- `gitlab_add_comment_to_merge_request`: Adds a comment to a GitLab Merge Request. Can be a general comment, a reply to an existing discussion, or an inline comment on a specific line.
+- `gitlab_list_merge_requests`: Lists merge requests for a given GitLab project.
+- `gitlab_assign_reviewers_to_merge_request`: Assigns reviewers to a GitLab Merge Request.
+- `gitlab_list_project_members`: Lists all members (contributors) of a given GitLab project.
+- `gitlab_list_project_members_by_project_name`: Lists all members (contributors) of a given GitLab project by project name.
+- `gitlab_list_projects_by_name`: Filters GitLab projects by name using a fuzzy, case-insensitive match.
+- `gitlab_list_all_projects`: Lists all accessible GitLab projects.
+- `gitlab_list_all_releases`: Fetches releases for a given GitLab project.
+- `gitlab_list_releases_since_version`: Filters releases for a given GitLab project since a specific version.
+- `gitlab_get_user_id_by_username`: Retrieves the GitLab user ID for a given username.
+- `gitlab_get_user_activities`: Fetches activities for a given GitLab user by their username, optionally filtered by date.
 
-### 2. `list_merge_requests`
-Lists merge requests for a specific project.
+### Jira Tools
 
-**Parameters**:
-- `projectId` (number): The GitLab project ID
-
-### 3. `get_merge_request_details`
-Fetches detailed information about a merge request.
-
-**Parameters**:
-- `projectId` (number): The GitLab project ID
-- `mrIid` (number): The merge request IID (internal ID)
-
-### 4. `add_comment_to_merge_request`
-Adds a comment to a merge request.
-
-**Parameters**:
-- `projectId` (number): The GitLab project ID
-- `mrIid` (number): The merge request IID
-- `commentBody` (string): The comment content
-- `discussionId` (string, optional): ID of existing discussion to reply to
-- `position` (object, optional): Position for inline comments
-
-### 5. `filter_projects_by_name`
-Filters GitLab projects by name using a fuzzy, case-insensitive match.
-
-**Parameters**:
-- `projectName` (string): The name or partial name of the project to filter by.
+- `jira_get_jira_ticket_details`: Fetches detailed information about a Jira ticket.
+- `jira_get_jira_ticket_comments`: Fetches comments for a Jira ticket.
+- `jira_add_comment_to_ticket`: Adds a comment to a Jira ticket.
+- `jira_search_tickets_by_jql`: Searches for Jira tickets using a JQL (Jira Query Language) string.
+- `jira_create_ticket`: Creates a new Jira ticket with given fields.
+- `jira_get_available_transitions`: Fetches available transitions for a Jira ticket.
+- `jira_update_ticket`: Updates a Jira ticket summary, description, labels.
+- `jira_transition_ticket`: Transitions a Jira ticket to a new status.
 
 ## Troubleshooting
 
 ### Common Issues
 
 1. **"Cannot find module" errors**: Make sure you've run `npm install` and `npm run build`
-
-2. **Authentication errors**: Verify your `GITLAB_ACCESS_TOKEN` has the necessary permissions:
-   - `api` scope for full API access
-   - `read_user` scope for user information
-
-3. **Connection errors**: Ensure your `GITLAB_URL` is correct and accessible
-
-4. **Server not responding**: Check that the MCP server process is running and the path in your config is correct
+2. **Authentication errors**: Verify your `GITLAB_ACCESS_TOKEN`, `ATLASSIAN_USER_EMAIL`, and `ATLASSIAN_API_TOKEN` have the necessary permissions.
+3. **Connection errors**: Ensure your `GITLAB_URL` and `ATLASSIAN_SITE_NAME` are correct and accessible.
+4. **Server not responding**: Check that the MCP server process is running and the path in your config is correct.
 
 ### Debug Mode
 
@@ -157,6 +129,9 @@ To see detailed logs, you can run the server directly:
 ```bash
 export GITLAB_URL="your-url"
 export GITLAB_ACCESS_TOKEN="your-token"
+export ATLASSIAN_SITE_NAME="your-atlassian-site-name"
+export ATLASSIAN_USER_EMAIL="your-email@example.com"
+export ATLASSIAN_API_TOKEN="your-jira-api-token"
 node dist/index.js
 ```
 
@@ -164,17 +139,19 @@ node dist/index.js
 
 ### Project Structure
 
-- `index.ts`: Main MCP server implementation
-- `gitlabOnPremMcp.ts`: GitLab API client
-- `gitlab.ts`: Type definitions
+- `src/index.ts`: Main MCP server implementation
+- `src/gitlab.service.ts`: GitLab API client
+- `src/gitlab.ts`: GitLab type definitions
+- `src/jira.service.ts`: Jira API client
+- `src/jira.ts`: Jira type definitions
 - `dist/`: Compiled JavaScript output
 
 ### Adding New Features
 
-1. Add new methods to `GitLabOnPremMcp` class
-2. Define new tools in the `tools` array in `index.ts`
-3. Add corresponding case in the tool handler
-4. Rebuild with `npm run build`
+1. Add new methods to the `GitLabService` or `JiraService` class.
+2. Define new tools in the `allTools` array in `index.ts`.
+3. Add a corresponding case in the tool handler in `index.ts`.
+4. Rebuild with `npm run build`.
 
 ## License
 
