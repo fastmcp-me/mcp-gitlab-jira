@@ -1,3 +1,4 @@
+import { Version3Client } from 'jira.js';
 import { levenshteinDistance } from './utils';
 import {
   JiraConfig,
@@ -319,7 +320,7 @@ export class JiraService {
       return (
         transitions.transitions
           ?.filter((transition) => transition.id && transition.name)
-          .map((transition) => ({
+          .map((transition: any) => ({
             id: transition.id!,
             name: transition.name!,
             to: {

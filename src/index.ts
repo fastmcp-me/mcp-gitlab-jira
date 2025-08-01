@@ -11,10 +11,10 @@ import {
 import { GitLabService } from './gitlab.service.js';
 import { GitLabConfig, GitLabPosition } from './gitlab.js';
 import { JiraService } from './jira.service.js';
+import { levenshteinDistance } from './utils.js';
 import {
   JiraConfig,
   JiraTicketUpdatePayload,
-  JiraTicketTransitionPayload,
   JiraCustomFieldUpdatePayload,
 } from './jira.js';
 
@@ -431,7 +431,7 @@ const allTools: Tool[] = [
   },
   {
     name: 'jira_transition_ticket',
-    description: 'Transitions a Jira ticket to a new status.',
+    description: 'Transitions a Jira ticket to a new status by name.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -439,15 +439,12 @@ const allTools: Tool[] = [
           type: 'string',
           description: 'The ID or key of the Jira ticket to transition.',
         },
-        payload: {
-          type: 'object',
-          description: 'An object containing the transition ID.',
-          properties: {
-            transitionId: { type: 'string', description: 'The ID of the transition to execute.' },
-          },
+        statusName: {
+          type: 'string',
+          description: 'The name of the status to transition to. The tool will find the closest match.',
         },
       },
-      required: ['ticketId', 'payload'],
+      required: ['ticketId', 'statusName'],
     },
   },
   {
@@ -896,16 +893,32 @@ server.setRequestHandler(
           if (!jiraService) {
             throw new Error('Jira service is not initialized.');
           }
-          const { ticketId, payload } = args as {
+          const { ticketId, statusName } = args as {
             ticketId: string;
-            payload: JiraTicketTransitionPayload;
+            statusName: string;
           };
-          await jiraService.transitionTicket(ticketId, payload.transitionId);
+          const availableTransitions = await jiraService.getAvailableTransitions(ticketId);
+          if (availableTransitions.length === 0) {
+            throw new Error(`No available transitions for ticket ${ticketId}.`);
+          }
+
+          const bestMatch = availableTransitions.reduce(
+            (best: { distance: number; transition: any }, transition: any) => {
+              const distance = levenshteinDistance(statusName, transition.name);
+              if (distance < best.distance) {
+                return { distance, transition };
+              }
+              return best;
+            },
+            { distance: Infinity, transition: availableTransitions[0] },
+          );
+
+          await jiraService.transitionTicket(ticketId, bestMatch.transition.id);
           return {
             content: [
               {
                 type: 'text',
-                text: `Ticket ${ticketId} transitioned successfully.`,
+                text: `Ticket ${ticketId} transitioned to ${bestMatch.transition.name} successfully.`,
               },
             ],
           };
