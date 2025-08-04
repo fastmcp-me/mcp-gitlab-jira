@@ -23,16 +23,21 @@ const gitlabUrl = process.env.GITLAB_URL;
 const gitlabAccessToken = process.env.GITLAB_ACCESS_TOKEN;
 
 let gitlabService: GitLabService | undefined;
-if (gitlabUrl && gitlabAccessToken) {
-  const gitlabConfig: GitLabConfig = {
-    url: gitlabUrl,
-    accessToken: gitlabAccessToken,
-  };
-  gitlabService = new GitLabService(gitlabConfig);
-} else {
-  console.warn(
-    'Warning: GITLAB_URL and GITLAB_ACCESS_TOKEN environment variables are not set. GitLab tools will be unavailable.',
-  );
+try {
+  if (gitlabUrl && gitlabAccessToken) {
+    const gitlabConfig: GitLabConfig = {
+      url: gitlabUrl,
+      accessToken: gitlabAccessToken,
+    };
+    gitlabService = new GitLabService(gitlabConfig);
+    console.error('GitLab service initialized');
+  } else {
+    console.warn(
+      'Warning: GITLAB_URL and GITLAB_ACCESS_TOKEN environment variables are not set. GitLab tools will be unavailable.',
+    );
+  }
+} catch (error) {
+  console.error('Error initializing GitLab service:', error);
 }
 
 // Load Jira configuration from environment variables
@@ -41,17 +46,22 @@ const jiraUserEmail = process.env.ATLASSIAN_USER_EMAIL;
 const jiraApiToken = process.env.ATLASSIAN_API_TOKEN;
 
 let jiraService: JiraService | undefined;
-if (jiraApiBaseUrl && jiraUserEmail && jiraApiToken) {
-  const jiraConfig: JiraConfig = {
-    apiBaseUrl: jiraApiBaseUrl,
-    userEmail: jiraUserEmail,
-    apiToken: jiraApiToken,
-  };
-  jiraService = new JiraService(jiraConfig);
-} else {
-  console.warn(
-    'Warning: ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables are not set. Jira tools will be unavailable.',
-  );
+try {
+  if (jiraApiBaseUrl && jiraUserEmail && jiraApiToken) {
+    const jiraConfig: JiraConfig = {
+      apiBaseUrl: jiraApiBaseUrl,
+      userEmail: jiraUserEmail,
+      apiToken: jiraApiToken,
+    };
+    jiraService = new JiraService(jiraConfig);
+    console.error('Jira service initialized');
+  } else {
+    console.warn(
+      'Warning: ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables are not set. Jira tools will be unavailable.',
+    );
+  }
+} catch (error) {
+  console.error('Error initializing Jira service:', error);
 }
 
 // Define all possible tools
@@ -955,6 +965,9 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('GitLab/Jira MCP server started');
+  while (true) {
+    await new Promise(resolve => setTimeout(resolve, 1000));
+  }
 }
 
 main().catch((error) => {

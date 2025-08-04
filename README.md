@@ -73,6 +73,88 @@ Create or update your MCP configuration file (usually `~/.mcp/config.json` or si
 }
 ```
 
+## Running with Docker
+
+You can also run this MCP server in a Docker container using the pre-built image from Docker Hub.
+
+### Available Docker Images
+
+The Docker images are automatically built and published to Docker Hub for each release:
+- **Latest release**: `hainanzhao/mcp-gitlab-jira:latest`
+- **Specific versions**: `hainanzhao/mcp-gitlab-jira:v0.1.2`, `hainanzhao/mcp-gitlab-jira:v0.1.1`, etc.
+- **View all available tags**: [Docker Hub - mcp-gitlab-jira](https://hub.docker.com/r/hainanzhao/mcp-gitlab-jira/tags)
+
+The images are built for multiple architectures: `linux/amd64` and `linux/arm64` (Apple Silicon compatible).
+
+### Usage
+
+1.  **Pull and run the Docker container:**
+    ```bash
+    docker run -d --name mcp-gitlab-jira-container \
+      -e GITLAB_URL="https://your-gitlab-instance.com" \
+      -e GITLAB_ACCESS_TOKEN="your-personal-access-token" \
+      -e ATLASSIAN_SITE_NAME="your-atlassian-site-name" \
+      -e ATLASSIAN_USER_EMAIL="your-email@example.com" \
+      -e ATLASSIAN_API_TOKEN="your-jira-api-token" \
+      hainanzhao/mcp-gitlab-jira:latest
+    ```
+
+2.  **Alternative: Run without persistent container (one-time execution):**
+    ```bash
+    docker run --rm -i \
+      -e GITLAB_URL="https://your-gitlab-instance.com" \
+      -e GITLAB_ACCESS_TOKEN="your-personal-access-token" \
+      -e ATLASSIAN_SITE_NAME="your-atlassian-site-name" \
+      -e ATLASSIAN_USER_EMAIL="your-email@example.com" \
+      -e ATLASSIAN_API_TOKEN="your-jira-api-token" \
+      hainanzhao/mcp-gitlab-jira:latest
+    ```
+
+### Using with MCP Clients (Docker)
+
+You have two options for using the Docker container with MCP clients:
+
+#### Option 1: Using a persistent container (recommended)
+
+First, start the container as shown above, then update your MCP configuration file. The `env` block is empty because the necessary environment variables are passed directly to the container using the `-e` flag in the `docker run` command.
+
+```json
+{
+  "mcpServers": {
+    "gitlab-jira-mcp": {
+      "command": "docker",
+      "args": ["exec", "-i", "mcp-gitlab-jira-container", "npm", "start"],
+      "env": {}
+    }
+  }
+}
+```
+
+#### Option 2: Using one-time execution
+
+This runs a new container for each MCP session:
+
+```json
+{
+  "mcpServers": {
+    "gitlab-jira-mcp": {
+      "command": "docker",
+      "args": [
+        "run", "--rm", "-i",
+        "-e", "GITLAB_URL=https://your-gitlab-instance.com",
+        "-e", "GITLAB_ACCESS_TOKEN=your-personal-access-token",
+        "-e", "ATLASSIAN_SITE_NAME=your-atlassian-site-name",
+        "-e", "ATLASSIAN_USER_EMAIL=your-email@example.com",
+        "-e", "ATLASSIAN_API_TOKEN=your-jira-api-token",
+        "hainanzhao/mcp-gitlab-jira:latest"
+      ],
+      "env": {}
+    }
+  }
+}
+```
+
+
 ## Available Tools
 
 ### GitLab Tools
@@ -133,6 +215,19 @@ For development, clone the repository and install the dependencies.
 npm install
 npm run build
 ```
+
+### Local Docker Development
+
+To test the Docker build locally before pushing:
+
+```bash
+# Build and test the Docker image locally
+./scripts/build-docker-local.sh
+```
+
+This script will build the Docker image and run basic tests to ensure it works correctly.
+
+> **For maintainers**: See [Docker Setup Guide](docs/DOCKER_SETUP.md) for information about setting up automated Docker Hub publishing.
 
 ### Project Structure
 
