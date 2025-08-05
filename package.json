@@ -24,7 +24,8 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
     "jira.js": "^5.2.2",
-    "node-fetch": "^3.3.0"
+    "node-fetch": "^3.3.0",
+    "semver": "^7.7.2"
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
@@ -37,7 +38,6 @@
     "globals": "^16.3.0",
     "jest": "^30.0.5",
     "prettier": "^3.6.2",
-    "semver": "^7.7.2",
     "ts-jest": "^29.4.0",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.38.0"
