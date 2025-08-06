@@ -20,7 +20,7 @@ import {
 
 // Load GitLab configuration from environment variables
 const gitlabUrl = process.env.GITLAB_URL;
-const gitlabAccessToken = process.env.GITLAB_ACCESS_TOKEN;
+const gitlabAccessToken = process.env.GITLAB_ACCESS_TOKEN || process.env.GITLAB_API_TOKEN;
 
 let gitlabService: GitLabService | undefined;
 try {
@@ -30,7 +30,7 @@ try {
       accessToken: gitlabAccessToken,
     };
     gitlabService = new GitLabService(gitlabConfig);
-    console.error('GitLab service initialized');
+    console.log('GitLab service initialized');
   } else {
     console.warn(
       'Warning: GITLAB_URL and GITLAB_ACCESS_TOKEN environment variables are not set. GitLab tools will be unavailable.',
@@ -54,7 +54,7 @@ try {
       apiToken: jiraApiToken,
     };
     jiraService = new JiraService(jiraConfig);
-    console.error('Jira service initialized');
+    console.log('Jira service initialized');
   } else {
     console.warn(
       'Warning: ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables are not set. Jira tools will be unavailable.',
@@ -964,7 +964,7 @@ server.setRequestHandler(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('GitLab/Jira MCP server started');
+  console.log('GitLab/Jira MCP server started');
   while (true) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }

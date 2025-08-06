@@ -34,7 +34,7 @@ child.stdout.on('data', (data) => {
 });
 
 child.stderr.on('data', (data) => {
-  console.error('Server stderr:', data.toString());
+  console.log('Server', data.toString());
 });
 
 child.on('close', (code) => {
