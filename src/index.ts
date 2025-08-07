@@ -465,6 +465,432 @@ const allTools: Tool[] = [
       properties: {},
     },
   },
+  // New GitLab Pipeline/CI/CD Tools
+  {
+    name: 'gitlab_get_project_pipelines',
+    description: 'Gets pipelines for a GitLab project, optionally filtered by branch/ref.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project (e.g., "namespace/project-name").',
+        },
+        ref: {
+          type: 'string',
+          description: 'Optional: Branch or ref to filter pipelines.',
+        },
+      },
+      required: ['projectPath'],
+    },
+  },
+  {
+    name: 'gitlab_get_merge_request_pipelines',
+    description: 'Gets pipelines for a specific GitLab Merge Request.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        mrUrl: {
+          type: 'string',
+          description: 'The URL of the GitLab Merge Request.',
+        },
+      },
+      required: ['mrUrl'],
+    },
+  },
+  {
+    name: 'gitlab_get_pipeline_details',
+    description: 'Gets detailed information about a specific pipeline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        pipelineId: {
+          type: 'number',
+          description: 'The ID of the pipeline.',
+        },
+      },
+      required: ['projectPath', 'pipelineId'],
+    },
+  },
+  {
+    name: 'gitlab_get_pipeline_jobs',
+    description: 'Gets jobs for a specific pipeline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        pipelineId: {
+          type: 'number',
+          description: 'The ID of the pipeline.',
+        },
+      },
+      required: ['projectPath', 'pipelineId'],
+    },
+  },
+  {
+    name: 'gitlab_get_job_logs',
+    description: 'Gets logs for a specific job.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        jobId: {
+          type: 'number',
+          description: 'The ID of the job.',
+        },
+      },
+      required: ['projectPath', 'jobId'],
+    },
+  },
+  {
+    name: 'gitlab_trigger_pipeline',
+    description: 'Triggers a new pipeline for a specific branch/ref.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        ref: {
+          type: 'string',
+          description: 'The branch or ref to trigger the pipeline for.',
+        },
+        variables: {
+          type: 'object',
+          description: 'Optional: Pipeline variables as key-value pairs.',
+        },
+      },
+      required: ['projectPath', 'ref'],
+    },
+  },
+  {
+    name: 'gitlab_retry_pipeline',
+    description: 'Retries a failed pipeline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        pipelineId: {
+          type: 'number',
+          description: 'The ID of the pipeline to retry.',
+        },
+      },
+      required: ['projectPath', 'pipelineId'],
+    },
+  },
+  {
+    name: 'gitlab_cancel_pipeline',
+    description: 'Cancels a running pipeline.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        pipelineId: {
+          type: 'number',
+          description: 'The ID of the pipeline to cancel.',
+        },
+      },
+      required: ['projectPath', 'pipelineId'],
+    },
+  },
+  // New GitLab Branch Management Tools
+  {
+    name: 'gitlab_list_branches',
+    description: 'Lists all branches in a GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+      },
+      required: ['projectPath'],
+    },
+  },
+  {
+    name: 'gitlab_create_branch',
+    description: 'Creates a new branch in a GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        branchName: {
+          type: 'string',
+          description: 'The name of the new branch.',
+        },
+        ref: {
+          type: 'string',
+          description: 'The branch or SHA to create the branch from.',
+        },
+      },
+      required: ['projectPath', 'branchName', 'ref'],
+    },
+  },
+  {
+    name: 'gitlab_delete_branch',
+    description: 'Deletes a branch from a GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        branchName: {
+          type: 'string',
+          description: 'The name of the branch to delete.',
+        },
+      },
+      required: ['projectPath', 'branchName'],
+    },
+  },
+  {
+    name: 'gitlab_get_branch_details',
+    description: 'Gets detailed information about a specific branch.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        branchName: {
+          type: 'string',
+          description: 'The name of the branch.',
+        },
+      },
+      required: ['projectPath', 'branchName'],
+    },
+  },
+  // New GitLab Issue Management Tools
+  {
+    name: 'gitlab_list_project_issues',
+    description: 'Lists issues in a GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        state: {
+          type: 'string',
+          enum: ['opened', 'closed', 'all'],
+          description: 'Filter issues by state.',
+        },
+      },
+      required: ['projectPath'],
+    },
+  },
+  {
+    name: 'gitlab_get_issue_details',
+    description: 'Gets detailed information about a specific GitLab issue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        issueIid: {
+          type: 'number',
+          description: 'The internal ID of the issue.',
+        },
+      },
+      required: ['projectPath', 'issueIid'],
+    },
+  },
+  {
+    name: 'gitlab_create_issue',
+    description: 'Creates a new issue in a GitLab project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        title: {
+          type: 'string',
+          description: 'The title of the issue.',
+        },
+        description: {
+          type: 'string',
+          description: 'The description of the issue.',
+        },
+        labels: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Labels to assign to the issue.',
+        },
+        assigneeIds: {
+          type: 'array',
+          items: { type: 'number' },
+          description: 'User IDs to assign the issue to.',
+        },
+      },
+      required: ['projectPath', 'title'],
+    },
+  },
+  {
+    name: 'gitlab_update_issue',
+    description: 'Updates an existing GitLab issue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        issueIid: {
+          type: 'number',
+          description: 'The internal ID of the issue.',
+        },
+        updates: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            description: { type: 'string' },
+            labels: { type: 'array', items: { type: 'string' } },
+            assigneeIds: { type: 'array', items: { type: 'number' } },
+            state: { type: 'string', enum: ['close', 'reopen'] },
+          },
+          description: 'Fields to update.',
+        },
+      },
+      required: ['projectPath', 'issueIid', 'updates'],
+    },
+  },
+  {
+    name: 'gitlab_close_issue',
+    description: 'Closes a GitLab issue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        issueIid: {
+          type: 'number',
+          description: 'The internal ID of the issue.',
+        },
+      },
+      required: ['projectPath', 'issueIid'],
+    },
+  },
+  {
+    name: 'gitlab_add_comment_to_issue',
+    description: 'Adds a comment to a GitLab issue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        issueIid: {
+          type: 'number',
+          description: 'The internal ID of the issue.',
+        },
+        body: {
+          type: 'string',
+          description: 'The comment text.',
+        },
+      },
+      required: ['projectPath', 'issueIid', 'body'],
+    },
+  },
+  {
+    name: 'gitlab_get_issue_comments',
+    description: 'Gets comments for a GitLab issue.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectPath: {
+          type: 'string',
+          description: 'The path of the GitLab project.',
+        },
+        issueIid: {
+          type: 'number',
+          description: 'The internal ID of the issue.',
+        },
+      },
+      required: ['projectPath', 'issueIid'],
+    },
+  },
+  // New JIRA Project Management Tools
+  {
+    name: 'jira_get_all_projects',
+    description: 'Gets all accessible Jira projects.',
+    inputSchema: {
+      type: 'object',
+      properties: {},
+    },
+  },
+  {
+    name: 'jira_get_project_details',
+    description: 'Gets detailed information about a specific Jira project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectKey: {
+          type: 'string',
+          description: 'The key of the Jira project.',
+        },
+      },
+      required: ['projectKey'],
+    },
+  },
+  {
+    name: 'jira_get_project_components',
+    description: 'Gets components for a Jira project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectKey: {
+          type: 'string',
+          description: 'The key of the Jira project.',
+        },
+      },
+      required: ['projectKey'],
+    },
+  },
+  {
+    name: 'jira_get_project_versions',
+    description: 'Gets versions for a Jira project.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectKey: {
+          type: 'string',
+          description: 'The key of the Jira project.',
+        },
+      },
+      required: ['projectKey'],
+    },
+  },
 ];
 
 // Filter tools based on service availability
@@ -939,6 +1365,387 @@ server.setRequestHandler(
             throw new Error('Jira service is not initialized.');
           }
           const result = await jiraService.getAllFields();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        // New GitLab Pipeline/CI/CD handlers
+        case 'gitlab_get_project_pipelines': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, ref } = args as { projectPath: string; ref?: string };
+          const result = await gitlabService.getProjectPipelines(projectPath, ref);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_get_merge_request_pipelines': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { mrUrl } = args as { mrUrl: string };
+          const result = await gitlabService.getMergeRequestPipelines(mrUrl);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_get_pipeline_details': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, pipelineId } = args as { projectPath: string; pipelineId: number };
+          const result = await gitlabService.getPipelineDetails(projectPath, pipelineId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_get_pipeline_jobs': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, pipelineId } = args as { projectPath: string; pipelineId: number };
+          const result = await gitlabService.getPipelineJobs(projectPath, pipelineId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_get_job_logs': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, jobId } = args as { projectPath: string; jobId: number };
+          const result = await gitlabService.getJobLogs(projectPath, jobId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_trigger_pipeline': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, ref, variables } = args as { projectPath: string; ref: string; variables?: Record<string, string> };
+          const result = await gitlabService.triggerPipeline(projectPath, ref, variables);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Pipeline triggered successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_retry_pipeline': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, pipelineId } = args as { projectPath: string; pipelineId: number };
+          const result = await gitlabService.retryPipeline(projectPath, pipelineId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Pipeline retry triggered successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_cancel_pipeline': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, pipelineId } = args as { projectPath: string; pipelineId: number };
+          const result = await gitlabService.cancelPipeline(projectPath, pipelineId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Pipeline cancelled successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        // New GitLab Branch Management handlers
+        case 'gitlab_list_branches': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath } = args as { projectPath: string };
+          const result = await gitlabService.listBranches(projectPath);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_create_branch': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, branchName, ref } = args as { projectPath: string; branchName: string; ref: string };
+          const result = await gitlabService.createBranch(projectPath, branchName, ref);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Branch created successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_delete_branch': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, branchName } = args as { projectPath: string; branchName: string };
+          await gitlabService.deleteBranch(projectPath, branchName);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Branch ${branchName} deleted successfully.`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_get_branch_details': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, branchName } = args as { projectPath: string; branchName: string };
+          const result = await gitlabService.getBranchDetails(projectPath, branchName);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        // New GitLab Issue Management handlers
+        case 'gitlab_list_project_issues': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, state } = args as { projectPath: string; state?: 'opened' | 'closed' | 'all' };
+          const result = await gitlabService.listProjectIssues(projectPath, state);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_get_issue_details': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, issueIid } = args as { projectPath: string; issueIid: number };
+          const result = await gitlabService.getIssueDetails(projectPath, issueIid);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_create_issue': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, title, description, labels, assigneeIds } = args as { 
+            projectPath: string; 
+            title: string; 
+            description?: string; 
+            labels?: string[]; 
+            assigneeIds?: number[] 
+          };
+          const result = await gitlabService.createIssue(projectPath, title, description, labels, assigneeIds);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Issue created successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_update_issue': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, issueIid, updates } = args as { 
+            projectPath: string; 
+            issueIid: number; 
+            updates: any 
+          };
+          const result = await gitlabService.updateIssue(projectPath, issueIid, updates);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Issue updated successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_close_issue': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, issueIid } = args as { projectPath: string; issueIid: number };
+          const result = await gitlabService.closeIssue(projectPath, issueIid);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Issue closed successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_add_comment_to_issue': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, issueIid, body } = args as { projectPath: string; issueIid: number; body: string };
+          const result = await gitlabService.addCommentToIssue(projectPath, issueIid, body);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Comment added successfully: ${JSON.stringify(result, null, 2)}`,
+              },
+            ],
+          };
+        }
+
+        case 'gitlab_get_issue_comments': {
+          if (!gitlabService) {
+            throw new Error('GitLab service is not initialized.');
+          }
+          const { projectPath, issueIid } = args as { projectPath: string; issueIid: number };
+          const result = await gitlabService.getIssueComments(projectPath, issueIid);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        // New JIRA Project Management handlers
+        case 'jira_get_all_projects': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const result = await jiraService.getAllProjects();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_project_details': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { projectKey } = args as { projectKey: string };
+          const result = await jiraService.getProjectDetails(projectKey);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_project_components': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { projectKey } = args as { projectKey: string };
+          const result = await jiraService.getProjectComponents(projectKey);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_project_versions': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { projectKey } = args as { projectKey: string };
+          const result = await jiraService.getProjectVersions(projectKey);
           return {
             content: [
               {

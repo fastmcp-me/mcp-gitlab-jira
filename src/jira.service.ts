@@ -371,4 +371,59 @@ export class JiraService {
       throw error;
     }
   }
+
+  // New tool: Get All Projects
+  async getAllProjects(): Promise<any[]> {
+    try {
+      // Use searchProjects instead of getAllProjects
+      const projects = await this.client.projects.searchProjects();
+      return projects.values || [];
+    } catch (error) {
+      console.error('Error fetching Jira projects:', error);
+      throw error;
+    }
+  }
+
+  // New tool: Get Project Details
+  async getProjectDetails(projectKey: string): Promise<any> {
+    try {
+      const project = await this.client.projects.getProject({
+        projectIdOrKey: projectKey,
+      });
+      return project;
+    } catch (error) {
+      console.error(`Error fetching Jira project details for ${projectKey}:`, error);
+      throw error;
+    }
+  }
+
+  // New tool: Get Project Components
+  async getProjectComponents(projectKey: string): Promise<any[]> {
+    try {
+      const components = await this.client.projectComponents.getProjectComponents({
+        projectIdOrKey: projectKey,
+      });
+      return components;
+    } catch (error) {
+      console.error(`Error fetching components for project ${projectKey}:`, error);
+      throw error;
+    }
+  }
+
+  // New tool: Get Project Versions
+  async getProjectVersions(projectKey: string): Promise<any[]> {
+    try {
+      const versions = await this.client.projectVersions.getProjectVersions({
+        projectIdOrKey: projectKey,
+      });
+      return versions;
+    } catch (error) {
+      console.error(`Error fetching versions for project ${projectKey}:`, error);
+      throw error;
+    }
+  }
+
+  // Note: Sprint and board functionality requires JIRA Agile API which might not be available
+  // in the version3 client. For now, we'll implement basic project functionality.
+  // Sprint/board features would need a separate agile client or REST API calls.
 }

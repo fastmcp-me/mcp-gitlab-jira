@@ -7,12 +7,16 @@ A Model Context Protocol (MCP) server for GitLab and Jira integration. This serv
 ### GitLab
 - **Projects**: List all accessible projects or filter them by name.
 - **Merge Requests**: List merge requests for a project, get detailed information (including diffs), add comments, and assign reviewers.
+- **Pipeline/CI/CD**: Get pipeline status, trigger/retry/cancel pipelines, get job details and logs.
+- **Branch Management**: List, create, delete branches and get branch details.
+- **Issue Management**: Create, list, update, close issues and manage comments.
 - **Files**: Get the content of a specific file at a given SHA.
 - **Releases**: List all releases for a project or filter them since a specific version.
 - **Users**: List project members, get a user's ID by username, and get user activities.
 
 ### Jira
 - **Tickets**: Get detailed information about a ticket, get comments, add comments, search for tickets using JQL, create new tickets, get available transitions, update tickets, and transition tickets to a new status.
+- **Project Management**: Get all projects, project details, components, and versions.
 
 ## Setup
 
@@ -159,6 +163,7 @@ This runs a new container for each MCP session:
 
 ### GitLab Tools
 
+#### Core GitLab Tools
 - `gitlab_get_merge_request_details`: Fetches detailed information about a GitLab Merge Request, including file diffs.
 - `gitlab_get_file_content`: Fetches the content of a specific file at a given SHA in a GitLab project.
 - `gitlab_add_comment_to_merge_request`: Adds a comment to a GitLab Merge Request. Can be a general comment, a reply to an existing discussion, or an inline comment on a specific line.
@@ -173,8 +178,34 @@ This runs a new container for each MCP session:
 - `gitlab_get_user_id_by_username`: Retrieves the GitLab user ID for a given username.
 - `gitlab_get_user_activities`: Fetches activities for a given GitLab user by their username, optionally filtered by date.
 
+#### GitLab Pipeline/CI/CD Tools
+- `gitlab_get_project_pipelines`: Gets pipelines for a GitLab project, optionally filtered by branch/ref.
+- `gitlab_get_merge_request_pipelines`: Gets pipelines for a specific GitLab Merge Request.
+- `gitlab_get_pipeline_details`: Gets detailed information about a specific pipeline.
+- `gitlab_get_pipeline_jobs`: Gets jobs for a specific pipeline.
+- `gitlab_get_job_logs`: Gets logs for a specific job.
+- `gitlab_trigger_pipeline`: Triggers a new pipeline for a specific branch/ref.
+- `gitlab_retry_pipeline`: Retries a failed pipeline.
+- `gitlab_cancel_pipeline`: Cancels a running pipeline.
+
+#### GitLab Branch Management Tools
+- `gitlab_list_branches`: Lists all branches in a GitLab project.
+- `gitlab_create_branch`: Creates a new branch in a GitLab project.
+- `gitlab_delete_branch`: Deletes a branch from a GitLab project.
+- `gitlab_get_branch_details`: Gets detailed information about a specific branch.
+
+#### GitLab Issue Management Tools
+- `gitlab_list_project_issues`: Lists issues in a GitLab project.
+- `gitlab_get_issue_details`: Gets detailed information about a specific GitLab issue.
+- `gitlab_create_issue`: Creates a new issue in a GitLab project.
+- `gitlab_update_issue`: Updates an existing GitLab issue.
+- `gitlab_close_issue`: Closes a GitLab issue.
+- `gitlab_add_comment_to_issue`: Adds a comment to a GitLab issue.
+- `gitlab_get_issue_comments`: Gets comments for a GitLab issue.
+
 ### Jira Tools
 
+#### Core Jira Tools
 - `jira_get_jira_ticket_details`: Fetches detailed information about a Jira ticket.
 - `jira_get_jira_ticket_comments`: Fetches comments for a Jira ticket.
 - `jira_add_comment_to_ticket`: Adds a comment to a Jira ticket.
@@ -184,6 +215,13 @@ This runs a new container for each MCP session:
 - `jira_update_ticket`: Updates a Jira ticket summary, description, labels.
 - `jira_update_custom_fields`: Updates custom fields on a Jira ticket.
 - `jira_transition_ticket`: Transitions a Jira ticket to a new status.
+- `jira_get_all_fields`: Fetches the list of all fields from Jira.
+
+#### Jira Project Management Tools
+- `jira_get_all_projects`: Gets all accessible Jira projects.
+- `jira_get_project_details`: Gets detailed information about a specific Jira project.
+- `jira_get_project_components`: Gets components for a Jira project.
+- `jira_get_project_versions`: Gets versions for a Jira project.
 
 ## Troubleshooting
 

@@ -515,4 +515,247 @@ export class GitLabService {
     }
     return this.callGitLabApi<any[]>(endpoint);
   }
+
+  // New tool: Get Pipeline Status for a Project
+  async getProjectPipelines(projectPath: string, ref?: string): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    let endpoint = `projects/${encodedProjectPath}/pipelines`;
+    if (ref) {
+      endpoint += `?ref=${encodeURIComponent(ref)}`;
+    }
+    return this.callGitLabApi<any[]>(endpoint);
+  }
+
+  // New tool: Get Pipeline Status for MR
+  async getMergeRequestPipelines(mrUrl: string): Promise<any[]> {
+    const { projectPath, mrIid } = this.parseMrUrl(mrUrl, this.config.url);
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any[]>(
+      `projects/${encodedProjectPath}/merge_requests/${mrIid}/pipelines`,
+    );
+  }
+
+  // New tool: Get Pipeline Details
+  async getPipelineDetails(projectPath: string, pipelineId: number): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/pipelines/${pipelineId}`,
+    );
+  }
+
+  // New tool: Get Pipeline Jobs
+  async getPipelineJobs(projectPath: string, pipelineId: number): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any[]>(
+      `projects/${encodedProjectPath}/pipelines/${pipelineId}/jobs`,
+    );
+  }
+
+  // New tool: Get Job Logs
+  async getJobLogs(projectPath: string, jobId: number): Promise<string> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const url = `${this.config.url}/api/v4/projects/${encodedProjectPath}/jobs/${jobId}/trace`;
+    const headers = {
+      'Private-Token': this.config.accessToken,
+    };
+
+    try {
+      const response = await fetch(url, { headers });
+      if (!response.ok) {
+        throw new Error(`Failed to get job logs: ${response.status} - ${response.statusText}`);
+      }
+      return await response.text();
+    } catch (error) {
+      console.error(`Failed to get job logs: ${error}`);
+      throw error;
+    }
+  }
+
+  // New tool: Trigger Pipeline
+  async triggerPipeline(projectPath: string, ref: string, variables?: Record<string, string>): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const body: any = { ref };
+    if (variables) {
+      body.variables = Object.entries(variables).map(([key, value]) => ({ key, value }));
+    }
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/pipeline`,
+      'POST',
+      body,
+    );
+  }
+
+  // New tool: Retry Pipeline
+  async retryPipeline(projectPath: string, pipelineId: number): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/pipelines/${pipelineId}/retry`,
+      'POST',
+    );
+  }
+
+  // New tool: Cancel Pipeline
+  async cancelPipeline(projectPath: string, pipelineId: number): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/pipelines/${pipelineId}/cancel`,
+      'POST',
+    );
+  }
+
+  // New tool: List Branches
+  async listBranches(projectPath: string): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any[]>(`projects/${encodedProjectPath}/repository/branches`);
+  }
+
+  // New tool: Create Branch
+  async createBranch(projectPath: string, branchName: string, ref: string): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/repository/branches`,
+      'POST',
+      {
+        branch: branchName,
+        ref: ref,
+      },
+    );
+  }
+
+  // New tool: Delete Branch
+  async deleteBranch(projectPath: string, branchName: string): Promise<void> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const encodedBranchName = encodeURIComponent(branchName);
+    await this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/repository/branches/${encodedBranchName}`,
+      'DELETE',
+    );
+  }
+
+  // New tool: Get Branch Details
+  async getBranchDetails(projectPath: string, branchName: string): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const encodedBranchName = encodeURIComponent(branchName);
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/repository/branches/${encodedBranchName}`,
+    );
+  }
+
+  // New tool: List Project Issues
+  async listProjectIssues(projectPath: string, state?: 'opened' | 'closed' | 'all'): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    let endpoint = `projects/${encodedProjectPath}/issues`;
+    if (state) {
+      endpoint += `?state=${state}`;
+    }
+    return this.callGitLabApi<any[]>(endpoint);
+  }
+
+  // New tool: Get Issue Details
+  async getIssueDetails(projectPath: string, issueIid: number): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/issues/${issueIid}`,
+    );
+  }
+
+  // New tool: Create Issue
+  async createIssue(projectPath: string, title: string, description?: string, labels?: string[], assigneeIds?: number[]): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const body: any = { title };
+    if (description) body.description = description;
+    if (labels && labels.length > 0) body.labels = labels.join(',');
+    if (assigneeIds && assigneeIds.length > 0) body.assignee_ids = assigneeIds;
+    
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/issues`,
+      'POST',
+      body,
+    );
+  }
+
+  // New tool: Update Issue
+  async updateIssue(projectPath: string, issueIid: number, updates: {
+    title?: string;
+    description?: string;
+    labels?: string[];
+    assigneeIds?: number[];
+    state?: 'close' | 'reopen';
+  }): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const body: any = {};
+    
+    if (updates.title) body.title = updates.title;
+    if (updates.description) body.description = updates.description;
+    if (updates.labels) body.labels = updates.labels.join(',');
+    if (updates.assigneeIds) body.assignee_ids = updates.assigneeIds;
+    if (updates.state) body.state_event = updates.state;
+    
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/issues/${issueIid}`,
+      'PUT',
+      body,
+    );
+  }
+
+  // New tool: Close Issue
+  async closeIssue(projectPath: string, issueIid: number): Promise<any> {
+    return this.updateIssue(projectPath, issueIid, { state: 'close' });
+  }
+
+  // New tool: Add Comment to Issue
+  async addCommentToIssue(projectPath: string, issueIid: number, body: string): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/issues/${issueIid}/notes`,
+      'POST',
+      { body },
+    );
+  }
+
+  // New tool: Get Issue Comments
+  async getIssueComments(projectPath: string, issueIid: number): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any[]>(
+      `projects/${encodedProjectPath}/issues/${issueIid}/notes`,
+    );
+  }
+
+  // New tool: Get Project Tags
+  async getProjectTags(projectPath: string): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any[]>(`projects/${encodedProjectPath}/repository/tags`);
+  }
+
+  // New tool: Create Tag
+  async createTag(projectPath: string, tagName: string, ref: string, message?: string): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    const body: any = {
+      tag_name: tagName,
+      ref: ref,
+    };
+    if (message) body.message = message;
+    
+    return this.callGitLabApi<any>(
+      `projects/${encodedProjectPath}/repository/tags`,
+      'POST',
+      body,
+    );
+  }
+
+  // New tool: Get Deployment Status
+  async getDeployments(projectPath: string, environment?: string): Promise<any[]> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    let endpoint = `projects/${encodedProjectPath}/deployments`;
+    if (environment) {
+      endpoint += `?environment=${encodeURIComponent(environment)}`;
+    }
+    return this.callGitLabApi<any[]>(endpoint);
+  }
+
+  // New tool: Get Project Statistics
+  async getProjectStatistics(projectPath: string): Promise<any> {
+    const encodedProjectPath = encodeURIComponent(projectPath);
+    return this.callGitLabApi<any>(`projects/${encodedProjectPath}?statistics=true`);
+  }
 }
