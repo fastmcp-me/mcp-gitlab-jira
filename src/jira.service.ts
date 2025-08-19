@@ -37,7 +37,24 @@ export class JiraService {
         issueIdOrKey: ticketId,
       });
 
-      return issue.fields as JiraTicket;
+      return {
+        id: issue.id ?? '',
+        key: issue.key ?? '',
+        summary: issue.fields?.summary ?? '',
+        description: typeof issue.fields?.description === 'string' 
+          ? issue.fields.description 
+          : issue.fields?.description?.content ? 'Description available (complex format)' : '',
+        status: issue.fields?.status?.name ?? '',
+        assignee: issue.fields?.assignee ? {
+          displayName: issue.fields.assignee.displayName ?? '',
+          emailAddress: issue.fields.assignee.emailAddress ?? '',
+          accountId: issue.fields.assignee.accountId ?? ''
+        } : null,
+        priority: issue.fields?.priority?.name ?? '',
+        labels: issue.fields?.labels || [],
+        updated: issue.fields?.updated ?? '',
+        created: issue.fields?.created ?? ''
+      };
     } catch (error) {
       console.error(
         `Error fetching Jira ticket details for ${ticketId}:`,
@@ -252,8 +269,26 @@ export class JiraService {
 
   async searchTicketsByJQL(jql: string): Promise<JiraTicket[]> {
     try {
+      // Debug logging for development
+      if (process.env.NODE_ENV === 'development') {
+        console.log('🔍 JQL Debug - Input:', jql);
+        console.log('🔍 JQL Debug - API Endpoint:', this.config.apiBaseUrl);
+        console.log('🔍 JQL Debug - Timestamp:', new Date().toISOString());
+      }
+
       const searchResults =
-        await this.client.issueSearch.searchForIssuesUsingJql({ jql });
+        await this.client.issueSearch.searchForIssuesUsingJqlEnhancedSearch({ 
+          jql,
+          fields: ['id', 'key', 'summary', 'description', 'status']
+        });
+
+      // Debug logging for results
+      if (process.env.NODE_ENV === 'development') {
+        console.log('✅ JQL Debug - Result count:', searchResults.issues?.length || 0);
+        if (searchResults.issues && searchResults.issues.length > 0) {
+          console.log('✅ JQL Debug - First result key:', searchResults.issues[0].key);
+        }
+      }
 
       return (
         searchResults.issues?.map((issue: any) => ({
@@ -269,7 +304,18 @@ export class JiraService {
         })) || []
       );
     } catch (error) {
-      console.error(`Error searching Jira tickets with JQL: ${jql}:`, error);
+      console.error(`❌ JQL Debug - Error searching with JQL: ${jql}:`, error);
+      
+      // Enhanced error logging for debugging
+      if (process.env.NODE_ENV === 'development') {
+        console.error('❌ JQL Debug - Error details:', {
+          message: error instanceof Error ? error.message : 'Unknown error',
+          stack: error instanceof Error ? error.stack : undefined,
+          jql: jql,
+          timestamp: new Date().toISOString()
+        });
+      }
+      
       throw error;
     }
   }
@@ -421,6 +467,269 @@ export class JiraService {
       console.error(`Error fetching versions for project ${projectKey}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Unified search method that accepts multiple criteria and builds JQL dynamically
+   * This replaces all the individual search methods with a single flexible interface
+   */
+  async searchTickets(criteria: {
+    projectKey?: string;
+    assigneeEmail?: string;
+    assignedToMe?: boolean;
+    statusCategory?: 'To Do' | 'In Progress' | 'Done';
+    status?: string;
+    priority?: string;
+    labels?: string[];
+    labelsMatchAll?: boolean;
+    updatedSince?: string;
+    updatedBefore?: string;
+    createdSince?: string;
+    createdBefore?: string;
+    recentDays?: number;
+    issueType?: string;
+    reporter?: string;
+    text?: string;
+    maxResults?: number;
+    orderBy?: string;
+  } = {}): Promise<JiraTicket[]> {
+    const maxResults = criteria.maxResults || 50;
+    const orderBy = criteria.orderBy || 'updated DESC';
+    
+    // Build JQL conditions array
+    const conditions: string[] = [];
+    
+    // Project filter - use fuzzy matching if not exact match
+    if (criteria.projectKey) {
+      // Try exact match first, then fuzzy if it contains spaces or looks partial
+      if (criteria.projectKey.includes(' ') || criteria.projectKey.length < 3) {
+        conditions.push(`project in projectsWhere("name ~ '${criteria.projectKey}' OR key ~ '${criteria.projectKey}'")`);
+      } else {
+        conditions.push(`project = "${criteria.projectKey}"`);
+      }
+    }
+    
+    // Assignee filters
+    if (criteria.assignedToMe) {
+      conditions.push('assignee = currentUser()');
+    } else if (criteria.assigneeEmail) {
+      // Support fuzzy matching for assignee - try email, display name, or username
+      if (criteria.assigneeEmail.includes('@')) {
+        conditions.push(`assignee = "${criteria.assigneeEmail}"`);
+      } else {
+        // Fuzzy match by display name or username
+        conditions.push(`assignee in membersOf("jira-users") AND assignee ~ "${criteria.assigneeEmail}"`);
+      }
+    }
+    
+    // Status filters
+    if (criteria.statusCategory) {
+      conditions.push(`statusCategory = "${criteria.statusCategory}"`);
+    }
+    if (criteria.status) {
+      // Status fuzzy matching for common variations
+      const statusMap: { [key: string]: string[] } = {
+        'open': ['Open', 'To Do', 'New'],
+        'progress': ['In Progress', 'In Development', 'In Review'],
+        'review': ['In Review', 'Code Review', 'Peer Review'],
+        'testing': ['Testing', 'QA', 'In Testing'],
+        'done': ['Done', 'Closed', 'Resolved', 'Complete'],
+        'closed': ['Closed', 'Done', 'Resolved']
+      };
+      
+      const lowerStatus = criteria.status.toLowerCase();
+      const matches = statusMap[lowerStatus];
+      
+      if (matches) {
+        const statusConditions = matches.map(s => `status = "${s}"`);
+        conditions.push(`(${statusConditions.join(' OR ')})`);
+      } else {
+        conditions.push(`status = "${criteria.status}"`);
+      }
+    }
+    
+    // Priority filter - with fuzzy matching
+    if (criteria.priority) {
+      // Common priority fuzzy matching
+      const priorityMap: { [key: string]: string[] } = {
+        'high': ['High', 'Highest', 'Critical', 'Urgent'],
+        'medium': ['Medium', 'Normal'],
+        'low': ['Low', 'Lowest', 'Minor', 'Trivial'],
+        'critical': ['Critical', 'Highest'],
+        'urgent': ['Urgent', 'High', 'Highest']
+      };
+      
+      const lowerPriority = criteria.priority.toLowerCase();
+      const matches = priorityMap[lowerPriority];
+      
+      if (matches) {
+        const priorityConditions = matches.map(p => `priority = "${p}"`);
+        conditions.push(`(${priorityConditions.join(' OR ')})`);
+      } else {
+        conditions.push(`priority = "${criteria.priority}"`);
+      }
+    }
+    
+    // Issue type filter - with fuzzy matching
+    if (criteria.issueType) {
+      const typeMap: { [key: string]: string[] } = {
+        'bug': ['Bug', 'Defect', 'Issue'],
+        'story': ['Story', 'User Story'],
+        'task': ['Task', 'To Do'],
+        'epic': ['Epic'],
+        'feature': ['Feature', 'New Feature', 'Story']
+      };
+      
+      const lowerType = criteria.issueType.toLowerCase();
+      const matches = typeMap[lowerType];
+      
+      if (matches) {
+        const typeConditions = matches.map(t => `issueType = "${t}"`);
+        conditions.push(`(${typeConditions.join(' OR ')})`);
+      } else {
+        conditions.push(`issueType = "${criteria.issueType}"`);
+      }
+    }
+    
+    // Reporter filter - with fuzzy matching
+    if (criteria.reporter) {
+      if (criteria.reporter.includes('@')) {
+        conditions.push(`reporter = "${criteria.reporter}"`);
+      } else {
+        // Fuzzy match by display name or username
+        conditions.push(`reporter in membersOf("jira-users") AND reporter ~ "${criteria.reporter}"`);
+      }
+    }
+    
+    // Labels filter
+    if (criteria.labels && criteria.labels.length > 0) {
+      const labelConditions = criteria.labels.map(label => `labels = "${label}"`);
+      const labelQuery = criteria.labelsMatchAll 
+        ? labelConditions.join(' AND ') 
+        : labelConditions.join(' OR ');
+      conditions.push(`(${labelQuery})`);
+    }
+    
+    // Date filters
+    if (criteria.recentDays) {
+      conditions.push(`updated >= -${criteria.recentDays}d`);
+    } else {
+      if (criteria.updatedSince) {
+        conditions.push(`updated >= "${criteria.updatedSince}"`);
+      }
+      if (criteria.updatedBefore) {
+        conditions.push(`updated <= "${criteria.updatedBefore}"`);
+      }
+    }
+    
+    if (criteria.createdSince) {
+      conditions.push(`created >= "${criteria.createdSince}"`);
+    }
+    if (criteria.createdBefore) {
+      conditions.push(`created <= "${criteria.createdBefore}"`);
+    }
+    
+    // Text search - enhanced fuzzy matching across multiple fields
+    if (criteria.text) {
+      const searchTerms = criteria.text.trim().split(/\s+/);
+      if (searchTerms.length === 1) {
+        // Single term - search across summary, description, and comments
+        conditions.push(`(summary ~ "${criteria.text}" OR description ~ "${criteria.text}" OR comment ~ "${criteria.text}")`);
+      } else {
+        // Multiple terms - each term should appear somewhere
+        const termConditions = searchTerms.map(term => 
+          `(summary ~ "${term}" OR description ~ "${term}" OR comment ~ "${term}")`
+        );
+        conditions.push(`(${termConditions.join(' AND ')})`);
+      }
+    }
+    
+    // If no conditions specified, search for recent tickets as default
+    if (conditions.length === 0) {
+      conditions.push('updated >= -7d');
+    }
+    
+    // Build final JQL
+    const jql = conditions.join(' AND ') + ` ORDER BY ${orderBy}`;
+    
+    // Debug logging for development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('🔍 Unified Search Debug - Generated JQL:', jql);
+      console.log('🔍 Unified Search Debug - Criteria:', JSON.stringify(criteria, null, 2));
+    }
+    
+    try {
+      const searchResults = await this.client.issueSearch.searchForIssuesUsingJqlEnhancedSearch({ 
+        jql,
+        maxResults,
+        fields: ['id', 'key', 'summary', 'description', 'status', 'assignee', 'priority', 'labels', 'updated', 'created', 'issuetype', 'reporter']
+      });
+
+      return this.mapSearchResultsToTickets(searchResults);
+    } catch (error) {
+      console.error(`Error in unified ticket search:`, error);
+      console.error('Generated JQL:', jql);
+      throw error;
+    }
+  }
+
+  /**
+   * Helper method to map search results to JiraTicket objects
+   */
+  private mapSearchResultsToTickets(searchResults: { issues?: Array<{ 
+    id: string; 
+    key: string; 
+    fields: { 
+      summary?: string; 
+      description?: { 
+        content?: Array<{ 
+          content?: Array<{ text: string }> 
+        }> 
+      }; 
+      status?: { name?: string }; 
+      assignee?: { 
+        displayName?: string; 
+        emailAddress?: string; 
+        accountId?: string 
+      }; 
+      priority?: { name?: string }; 
+      labels?: string[]; 
+      updated?: string; 
+      created?: string;
+      issuetype?: { name?: string };
+      reporter?: { 
+        displayName?: string; 
+        emailAddress?: string; 
+        accountId?: string 
+      };
+    } 
+  }> }): JiraTicket[] {
+    return (
+      searchResults.issues?.map((issue) => ({
+        id: issue.id,
+        key: issue.key,
+        summary: issue.fields.summary ?? '',
+        description: typeof issue.fields.description === 'string' 
+          ? issue.fields.description 
+          : issue.fields.description?.content ? 'Description available (complex format)' : '',
+        status: issue.fields.status?.name ?? '',
+        assignee: issue.fields.assignee ? {
+          displayName: issue.fields.assignee.displayName ?? '',
+          emailAddress: issue.fields.assignee.emailAddress ?? '',
+          accountId: issue.fields.assignee.accountId ?? ''
+        } : null,
+        priority: issue.fields.priority?.name ?? '',
+        labels: issue.fields.labels || [],
+        updated: issue.fields.updated ?? '',
+        created: issue.fields.created ?? '',
+        issueType: issue.fields.issuetype?.name ?? '',
+        reporter: issue.fields.reporter ? {
+          displayName: issue.fields.reporter.displayName ?? '',
+          emailAddress: issue.fields.reporter.emailAddress ?? '',
+          accountId: issue.fields.reporter.accountId ?? ''
+        } : null
+      })) || []
+    );
   }
 
   // Note: Sprint and board functionality requires JIRA Agile API which might not be available

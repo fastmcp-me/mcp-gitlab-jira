@@ -304,7 +304,7 @@ const allTools: Tool[] = [
     },
   },
   {
-    name: 'jira_get_jira_ticket_details',
+    name: 'jira_get_ticket_details',
     description: 'Fetches detailed information about a Jira ticket.',
     inputSchema: {
       type: 'object',
@@ -318,7 +318,7 @@ const allTools: Tool[] = [
     },
   },
   {
-    name: 'jira_get_jira_ticket_comments',
+    name: 'jira_get_ticket_comments',
     description: 'Fetches comments for a Jira ticket.',
     inputSchema: {
       type: 'object',
@@ -463,6 +463,89 @@ const allTools: Tool[] = [
     inputSchema: {
       type: 'object',
       properties: {},
+    },
+  },
+  {
+    name: 'jira_search_tickets',
+    description: 'Searches for Jira tickets using multiple criteria. This is a convenience tool that builds JQL queries from simple parameters, making it easier for agents to search without writing complex JQL.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectKey: {
+          type: 'string',
+          description: 'Filter by project key or name. Supports fuzzy matching for partial names (e.g., "PROJ", "My Project").',
+        },
+        assigneeEmail: {
+          type: 'string',
+          description: 'Filter by assignee email, username, or display name. Supports fuzzy matching for names.',
+        },
+        assignedToMe: {
+          type: 'boolean',
+          description: 'Filter to tickets assigned to current user.',
+        },
+        statusCategory: {
+          type: 'string',
+          enum: ['To Do', 'In Progress', 'Done'],
+          description: 'Filter by status category.',
+        },
+        status: {
+          type: 'string',
+          description: 'Filter by status with fuzzy matching. Accepts: "open", "progress", "review", "testing", "done/closed".',
+        },
+        priority: {
+          type: 'string',
+          description: 'Filter by priority with fuzzy matching. Accepts: "high/urgent/critical", "medium/normal", "low/minor".',
+        },
+        labels: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Filter by labels.',
+        },
+        labelsMatchAll: {
+          type: 'boolean',
+          description: 'If true, tickets must have ALL labels. If false, tickets with ANY label (default: false).',
+        },
+        updatedSince: {
+          type: 'string',
+          description: 'Updated since date (e.g., "-7d", "-1w", "-1M", "2024-01-01").',
+        },
+        updatedBefore: {
+          type: 'string',
+          description: 'Updated before date.',
+        },
+        createdSince: {
+          type: 'string',
+          description: 'Created since date.',
+        },
+        createdBefore: {
+          type: 'string',
+          description: 'Created before date.',
+        },
+        recentDays: {
+          type: 'number',
+          description: 'Show tickets updated in last N days (shortcut for updatedSince).',
+        },
+        issueType: {
+          type: 'string',
+          description: 'Filter by issue type with fuzzy matching. Accepts: "bug/defect", "story/feature", "task", "epic".',
+        },
+        reporter: {
+          type: 'string',
+          description: 'Filter by reporter email, username, or display name. Supports fuzzy matching.',
+        },
+        text: {
+          type: 'string',
+          description: 'Fuzzy search text across summary, description, and comments. Supports multiple keywords.',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 50).',
+        },
+        orderBy: {
+          type: 'string',
+          description: 'Order results by field (default: "updated DESC"). Examples: "created ASC", "priority DESC", "key ASC".',
+        },
+      },
     },
   },
   // New GitLab Pipeline/CI/CD Tools
@@ -1188,7 +1271,7 @@ server.setRequestHandler(
           };
         }
 
-        case 'jira_get_jira_ticket_details': {
+        case 'jira_get_ticket_details': {
           if (!jiraService) {
             throw new Error('Jira service is not initialized.');
           }
@@ -1204,7 +1287,7 @@ server.setRequestHandler(
           };
         }
 
-        case 'jira_get_jira_ticket_comments': {
+        case 'jira_get_ticket_comments': {
           if (!jiraService) {
             throw new Error('Jira service is not initialized.');
           }
@@ -1365,6 +1448,41 @@ server.setRequestHandler(
             throw new Error('Jira service is not initialized.');
           }
           const result = await jiraService.getAllFields();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_search_tickets': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const searchCriteria = args as {
+            projectKey?: string;
+            assigneeEmail?: string;
+            assignedToMe?: boolean;
+            statusCategory?: 'To Do' | 'In Progress' | 'Done';
+            status?: string;
+            priority?: string;
+            labels?: string[];
+            labelsMatchAll?: boolean;
+            updatedSince?: string;
+            updatedBefore?: string;
+            createdSince?: string;
+            createdBefore?: string;
+            recentDays?: number;
+            issueType?: string;
+            reporter?: string;
+            text?: string;
+            maxResults?: number;
+            orderBy?: string;
+          };
+          const result = await jiraService.searchTickets(searchCriteria);
           return {
             content: [
               {
@@ -1631,7 +1749,13 @@ server.setRequestHandler(
           const { projectPath, issueIid, updates } = args as { 
             projectPath: string; 
             issueIid: number; 
-            updates: any 
+            updates: {
+              title?: string;
+              description?: string;
+              labels?: string[];
+              assigneeIds?: number[];
+              state?: 'close' | 'reopen';
+            };
           };
           const result = await gitlabService.updateIssue(projectPath, issueIid, updates);
           return {

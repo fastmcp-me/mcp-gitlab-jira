@@ -9,8 +9,26 @@ export interface JiraConfig {
 }
 
 export interface JiraTicket {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
+  id: string;
+  key: string;
+  summary: string;
+  description?: string;
+  status: string;
+  assignee?: {
+    displayName: string;
+    emailAddress: string;
+    accountId: string;
+  } | null;
+  priority?: string;
+  labels?: string[];
+  updated?: string;
+  created?: string;
+  issueType?: string;
+  reporter?: {
+    displayName: string;
+    emailAddress: string;
+    accountId: string;
+  } | null;
 }
 
 export interface JiraComment {
@@ -45,7 +63,7 @@ export interface JiraTicketUpdatePayload {
 }
 
 export interface JiraCustomFieldUpdatePayload {
-  [key: string]: any;
+  [key: string]: string | number | boolean | string[] | null | undefined;
 }
 
 export interface JiraTicketTransitionPayload {
