@@ -421,9 +421,9 @@ export class JiraService {
           field.name
             ?.toLowerCase()
             .trim()
-            .replace(/\s/g, '')
-            .replace(/_/g, '')
-            .replace(/-/g, '') === 'storypoints',
+            .replaceAll(' ', '')
+            .replaceAll('_', '')
+            .replaceAll('-', '') === 'storypoints',
       );
 
       if (!storyPointsField || !storyPointsField.id) {
