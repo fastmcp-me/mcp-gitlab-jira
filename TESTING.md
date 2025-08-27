@@ -22,7 +22,7 @@ Simple approach to test your MCP server with JSON-RPC requests.
 
 ### Get Ticket:
 ```json
-{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"jira_get_ticket_details","arguments":{"ticketId":"ALICE2-1000"}}}
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"jira_get_ticket_details","arguments":{"ticketId":"TICKET-1234"}}}
 ```
 
 ## Unified Search Tool with Fuzzy Matching

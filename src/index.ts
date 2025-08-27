@@ -30,9 +30,9 @@ try {
       accessToken: gitlabAccessToken,
     };
     gitlabService = new GitLabService(gitlabConfig);
-    console.log('GitLab service initialized');
+    console.error('GitLab service initialized');
   } else {
-    console.warn(
+    console.error(
       'Warning: GITLAB_URL and GITLAB_ACCESS_TOKEN environment variables are not set. GitLab tools will be unavailable.',
     );
   }
@@ -54,9 +54,9 @@ try {
       apiToken: jiraApiToken,
     };
     jiraService = new JiraService(jiraConfig);
-    console.log('Jira service initialized');
+    console.error('Jira service initialized');
   } else {
-    console.warn(
+    console.error(
       'Warning: ATLASSIAN_SITE_NAME, ATLASSIAN_USER_EMAIL, and ATLASSIAN_API_TOKEN environment variables are not set. Jira tools will be unavailable.',
     );
   }
@@ -1895,7 +1895,7 @@ server.setRequestHandler(
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.log('GitLab/Jira MCP server started');
+  console.error('GitLab/Jira MCP server started');
   while (true) {
     await new Promise(resolve => setTimeout(resolve, 1000));
   }

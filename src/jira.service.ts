@@ -150,11 +150,15 @@ export class JiraService {
     // Skip fields that are likely not useful for AI
     const skipFields = [
       'attachment', 'attachments', 'thumbnail', 'avatarUrls', 'avatar',
-      'worklog', 'watches', 'votes', 'timetracking', 'aggregatetimetracking',
+      'worklog', 'timetracking', 'aggregatetimetracking',
       'timeestimate', 'aggregatetimeestimate', 'timeoriginalestimate',
       'aggregatetimeoriginalestimate', 'timespent', 'aggregatetimespent',
       'workratio', 'progress', 'aggregateprogress', 'lastViewed',
-      'comment', 'issuelinks', 'subtasks', 'versions'
+      'issuelinks', 'subtasks', 'versions',
+      // Service desk related fields that often contain errors
+      'timeToCloseAfterResolution', 'timeToReviewNormalChange', 
+      'timeToFirstResponse', 'timeToResolution', 'timeToDone',
+      'timeToTriageNormalChange', 'restrictTo'
     ];
     
     if (skipFields.includes(fieldId)) {
@@ -173,6 +177,16 @@ export class JiraService {
 
     // Skip empty objects
     if (typeof fieldValue === 'object' && !Array.isArray(fieldValue) && Object.keys(fieldValue).length === 0) {
+      return true;
+    }
+
+    // Skip fields that contain error messages
+    if (typeof fieldValue === 'string' && fieldValue.includes('errorMessage')) {
+      return true;
+    }
+
+    // Skip objects that contain error messages
+    if (typeof fieldValue === 'object' && fieldValue.errorMessage) {
       return true;
     }
 
@@ -242,6 +256,27 @@ export class JiraService {
       return null;
     }
 
+    // Handle string values (including JSON strings that should be parsed)
+    if (typeof value === 'string') {
+      // Check if it's a JSON string that contains error messages
+      if (value.includes('errorMessage') || value.includes('service project you are trying to view does not exist')) {
+        return null; // Skip error messages
+      }
+      
+      // Try to parse JSON strings for better representation
+      if (value.startsWith('{') && value.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(value);
+          return this.transformSingleValue(parsed);
+        } catch {
+          // If parsing fails, return the original string
+          return value;
+        }
+      }
+      
+      return value;
+    }
+
     // Handle objects with name property (common in Jira)
     if (typeof value === 'object' && value.name) {
       return value.name;
@@ -267,7 +302,19 @@ export class JiraService {
       return value.name;
     }
 
-    // Handle complex objects by stringifying them if they have useful content
+    // Handle parent/epic link objects
+    if (typeof value === 'object' && value.key && value.fields) {
+      const summary = value.fields.summary || '';
+      const status = value.fields.status?.name || '';
+      return `${value.key}: ${summary}${status ? ` (${status})` : ''}`;
+    }
+
+    // Handle objects that contain error messages
+    if (typeof value === 'object' && value.errorMessage) {
+      return null; // Skip objects with error messages
+    }
+
+    // Handle complex objects
     if (typeof value === 'object') {
       // Skip objects that look like they contain system metadata
       const systemKeys = ['self', 'id', 'iconUrl', 'avatarUrls', 'projectId'];
@@ -277,8 +324,29 @@ export class JiraService {
         return null;
       }
 
-      // For other objects, return a simplified representation
-      return JSON.stringify(value);
+      // Handle objects with key-value pairs that might be useful
+      const keys = Object.keys(value);
+      if (keys.length === 1 && (keys[0] === 'key' || keys[0] === 'name' || keys[0] === 'value')) {
+        return value[keys[0]];
+      }
+
+      // For complex objects with multiple properties, create a readable summary
+      const importantKeys = ['key', 'name', 'summary', 'status', 'value', 'displayName'];
+      const importantData: { [key: string]: any } = {};
+      
+      for (const key of importantKeys) {
+        if (value[key] !== undefined && value[key] !== null) {
+          importantData[key] = value[key];
+        }
+      }
+
+      // If we found important data, return a clean object
+      if (Object.keys(importantData).length > 0) {
+        return importantData;
+      }
+
+      // Otherwise, skip this field
+      return null;
     }
 
     return value;
@@ -454,7 +522,7 @@ export class JiraService {
         issueIdOrKey: ticketId,
         fields,
       });
-      console.log(`Jira ticket ${ticketId} updated successfully.`);
+      console.error(`Jira ticket ${ticketId} updated successfully.`);
     } catch (error) {
       console.error(`Error updating Jira ticket ${ticketId}:`, error);
       throw error;
@@ -479,7 +547,7 @@ export class JiraService {
         issueIdOrKey: ticketId,
         fields,
       });
-      console.log(`Jira ticket ${ticketId} custom fields updated successfully.`);
+      console.error(`Jira ticket ${ticketId} custom fields updated successfully.`);
     } catch (error) {
       console.error(`Error updating Jira ticket custom fields ${ticketId}:`, error);
       throw error;
@@ -504,7 +572,7 @@ export class JiraService {
           ],
         },
       });
-      console.log(`Comment added to Jira ticket ${ticketId}.`);
+      console.error(`Comment added to Jira ticket ${ticketId}.`);
     } catch (error) {
       console.error(`Error adding comment to Jira ticket ${ticketId}:`, error);
       throw error;
@@ -515,9 +583,9 @@ export class JiraService {
     try {
       // Debug logging for development
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 JQL Debug - Input:', jql);
-        console.log('🔍 JQL Debug - API Endpoint:', this.config.apiBaseUrl);
-        console.log('🔍 JQL Debug - Timestamp:', new Date().toISOString());
+        console.error('🔍 JQL Debug - Input:', jql);
+        console.error('🔍 JQL Debug - API Endpoint:', this.config.apiBaseUrl);
+        console.error('🔍 JQL Debug - Timestamp:', new Date().toISOString());
       }
 
       const searchResults =
@@ -528,9 +596,9 @@ export class JiraService {
 
       // Debug logging for results
       if (process.env.NODE_ENV === 'development') {
-        console.log('✅ JQL Debug - Result count:', searchResults.issues?.length || 0);
+        console.error('✅ JQL Debug - Result count:', searchResults.issues?.length || 0);
         if (searchResults.issues && searchResults.issues.length > 0) {
-          console.log('✅ JQL Debug - First result key:', searchResults.issues[0].key);
+          console.error('✅ JQL Debug - First result key:', searchResults.issues[0].key);
         }
       }
 
@@ -595,7 +663,7 @@ export class JiraService {
         }
       }
       await this.client.issues.createIssue(params);
-      console.log('Jira ticket created successfully.');
+      console.error('Jira ticket created successfully.');
     } catch (error) {
       console.error('Error creating Jira ticket:', error);
       throw error;
@@ -638,7 +706,7 @@ export class JiraService {
           id: transitionId,
         },
       });
-      console.log(
+      console.error(
         `Jira ticket ${ticketId} transitioned successfully with transition ID ${transitionId}.`,
       );
     } catch (error) {
@@ -898,8 +966,8 @@ export class JiraService {
     
     // Debug logging for development
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Unified Search Debug - Generated JQL:', jql);
-      console.log('🔍 Unified Search Debug - Criteria:', JSON.stringify(criteria, null, 2));
+      console.error('🔍 Unified Search Debug - Generated JQL:', jql);
+      console.error('🔍 Unified Search Debug - Criteria:', JSON.stringify(criteria, null, 2));
     }
     
     try {
