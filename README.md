@@ -206,7 +206,7 @@ This runs a new container for each MCP session:
 ### Jira Tools
 
 #### Core Jira Tools
-- `jira_get_ticket_details`: Fetches detailed information about a Jira ticket.
+- `jira_get_ticket_details`: Fetches comprehensive information about a Jira ticket with flattened fields, including all custom fields with user-friendly names. Automatically filters out empty values and less useful fields (attachments, avatars). Returns both system and custom fields in a clean, flat structure.
 - `jira_get_ticket_comments`: Fetches comments for a Jira ticket.
 - `jira_add_comment_to_ticket`: Adds a comment to a Jira ticket.
 - `jira_search_tickets_by_jql`: Searches for Jira tickets using a JQL (Jira Query Language) string.

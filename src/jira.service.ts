@@ -8,6 +8,8 @@ import {
   JiraTicketUpdatePayload,
   JiraField,
   JiraCustomFieldUpdatePayload,
+  JiraSprint,
+  JiraBoard,
 } from './jira';
 
 export class JiraService {
@@ -31,30 +33,342 @@ export class JiraService {
 
   
 
+  /**
+   * Transform Jira issue fields into a flattened, user-friendly format
+   */
+  private async transformIssueFields(issue: any, allFields: JiraField[]): Promise<JiraTicket> {
+    const fields = issue.fields || {};
+    const fieldMap = new Map<string, string>();
+    
+    // Create a mapping from field ID to display name
+    allFields.forEach(field => {
+      fieldMap.set(field.id, field.name);
+    });
+
+    // Start with core fields that are always present
+    const result: JiraTicket = {
+      id: issue.id ?? '',
+      key: issue.key ?? '',
+      summary: fields.summary ?? '',
+      description: this.extractDescription(fields.description),
+      status: fields.status?.name ?? '',
+      assignee: this.extractUser(fields.assignee),
+      priority: fields.priority?.name ?? '',
+      labels: fields.labels || [],
+      updated: fields.updated ?? '',
+      created: fields.created ?? '',
+      issueType: fields.issuetype?.name ?? '',
+      reporter: this.extractUser(fields.reporter)
+    };
+
+    // Add other system and custom fields
+    Object.keys(fields).forEach(fieldId => {
+      const fieldValue = fields[fieldId];
+      const fieldName = fieldMap.get(fieldId) || fieldId;
+      
+      // Skip if already handled above or if value is empty/null
+      if (this.shouldSkipField(fieldId, fieldValue)) {
+        return;
+      }
+
+      // Transform the field name to be more user-friendly
+      const friendlyFieldName = this.transformFieldName(fieldName);
+      
+      // Transform the field value to be more readable
+      const transformedValue = this.transformFieldValue(fieldValue);
+      
+      if (transformedValue !== null && transformedValue !== undefined) {
+        result[friendlyFieldName] = transformedValue;
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Extract description from various formats
+   */
+  private extractDescription(description: any): string {
+    if (!description) return '';
+    
+    if (typeof description === 'string') {
+      return description;
+    }
+    
+    if (description.content) {
+      // Handle Atlassian Document Format (ADF)
+      return this.extractTextFromADF(description.content);
+    }
+    
+    return 'Description available (complex format)';
+  }
+
+  /**
+   * Extract text content from Atlassian Document Format
+   */
+  private extractTextFromADF(content: any[]): string {
+    if (!Array.isArray(content)) return '';
+    
+    return content
+      .map(block => {
+        if (block.type === 'paragraph' && block.content) {
+          return block.content
+            .map((item: any) => item.text || '')
+            .join('');
+        }
+        return '';
+      })
+      .filter(text => text.trim().length > 0)
+      .join('\n');
+  }
+
+  /**
+   * Extract user information from user objects
+   */
+  private extractUser(user: any): { displayName: string; emailAddress: string; accountId: string } | null {
+    if (!user) return null;
+    
+    return {
+      displayName: user.displayName ?? '',
+      emailAddress: user.emailAddress ?? '',
+      accountId: user.accountId ?? ''
+    };
+  }
+
+  /**
+   * Determine if a field should be skipped
+   */
+  private shouldSkipField(fieldId: string, fieldValue: any): boolean {
+    // Skip core fields already handled
+    const coreFields = [
+      'id', 'key', 'summary', 'description', 'status', 'assignee', 
+      'priority', 'labels', 'updated', 'created', 'issuetype', 'reporter'
+    ];
+    
+    if (coreFields.includes(fieldId)) {
+      return true;
+    }
+
+    // Skip fields that are likely not useful for AI
+    const skipFields = [
+      'attachment', 'attachments', 'thumbnail', 'avatarUrls', 'avatar',
+      'worklog', 'timetracking', 'aggregatetimetracking',
+      'timeestimate', 'aggregatetimeestimate', 'timeoriginalestimate',
+      'aggregatetimeoriginalestimate', 'timespent', 'aggregatetimespent',
+      'workratio', 'progress', 'aggregateprogress', 'lastViewed',
+      'issuelinks', 'subtasks', 'versions',
+      // Service desk related fields that often contain errors
+      'timeToCloseAfterResolution', 'timeToReviewNormalChange', 
+      'timeToFirstResponse', 'timeToResolution', 'timeToDone',
+      'timeToTriageNormalChange', 'restrictTo'
+    ];
+    
+    if (skipFields.includes(fieldId)) {
+      return true;
+    }
+
+    // Skip empty values
+    if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
+      return true;
+    }
+
+    // Skip empty arrays
+    if (Array.isArray(fieldValue) && fieldValue.length === 0) {
+      return true;
+    }
+
+    // Skip empty objects
+    if (typeof fieldValue === 'object' && !Array.isArray(fieldValue) && Object.keys(fieldValue).length === 0) {
+      return true;
+    }
+
+    // Skip fields that contain error messages
+    if (typeof fieldValue === 'string' && fieldValue.includes('errorMessage')) {
+      return true;
+    }
+
+    // Skip objects that contain error messages
+    if (typeof fieldValue === 'object' && fieldValue.errorMessage) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Transform field names to be more user-friendly
+   */
+  private transformFieldName(fieldName: string): string {
+    // Remove common prefixes/suffixes that are not user-friendly
+    let transformed = fieldName
+      .replace(/^(customfield_\d+|cf_)/i, '') // Remove custom field prefixes
+      .replace(/\s*\[.*\]$/, '') // Remove bracketed suffixes
+      .trim();
+
+    // Convert to camelCase if it's not already
+    if (transformed.includes(' ') || transformed.includes('_') || transformed.includes('-')) {
+      transformed = transformed
+        .toLowerCase()
+        .replace(/[^a-z0-9]+(.)/g, (_, char) => char.toUpperCase())
+        .replace(/^(.)/, (_, char) => char.toLowerCase());
+    }
+
+    // Handle some common field mappings
+    const fieldMappings: { [key: string]: string } = {
+      'storypoints': 'storyPoints',
+      'fixversion': 'fixVersions',
+      'fixversions': 'fixVersions',
+      'component': 'components',
+      'duedate': 'dueDate',
+      'resolutiondate': 'resolutionDate',
+      'lastviewed': 'lastViewed',
+      'timespent': 'timeSpent',
+      'timeestimate': 'timeEstimate',
+      'timeoriginalestimate': 'originalEstimate',
+      'issuecolor': 'issueColor',
+      'issuetype': 'issueType'
+    };
+
+    return fieldMappings[transformed.toLowerCase()] || transformed;
+  }
+
+  /**
+   * Transform field values to be more readable
+   */
+  private transformFieldValue(fieldValue: any): any {
+    if (fieldValue === null || fieldValue === undefined) {
+      return null;
+    }
+
+    // Handle arrays
+    if (Array.isArray(fieldValue)) {
+      return fieldValue
+        .map(item => this.transformSingleValue(item))
+        .filter(item => item !== null && item !== undefined);
+    }
+
+    return this.transformSingleValue(fieldValue);
+  }
+
+  /**
+   * Transform a single field value
+   */
+  private transformSingleValue(value: any): any {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    // Handle string values (including JSON strings that should be parsed)
+    if (typeof value === 'string') {
+      // Check if it's a JSON string that contains error messages
+      if (value.includes('errorMessage') || value.includes('service project you are trying to view does not exist')) {
+        return null; // Skip error messages
+      }
+      
+      // Try to parse JSON strings for better representation
+      if (value.startsWith('{') && value.endsWith('}')) {
+        try {
+          const parsed = JSON.parse(value);
+          return this.transformSingleValue(parsed);
+        } catch {
+          // If parsing fails, return the original string
+          return value;
+        }
+      }
+      
+      return value;
+    }
+
+    // Handle objects with name property (common in Jira)
+    if (typeof value === 'object' && value.name) {
+      return value.name;
+    }
+
+    // Handle objects with displayName property
+    if (typeof value === 'object' && value.displayName) {
+      return value.displayName;
+    }
+
+    // Handle objects with value property
+    if (typeof value === 'object' && value.value) {
+      return value.value;
+    }
+
+    // Handle user objects
+    if (typeof value === 'object' && value.accountId) {
+      return value.displayName || value.emailAddress || value.accountId;
+    }
+
+    // Handle version objects
+    if (typeof value === 'object' && value.name && value.released !== undefined) {
+      return value.name;
+    }
+
+    // Handle parent/epic link objects
+    if (typeof value === 'object' && value.key && value.fields) {
+      const summary = value.fields.summary || '';
+      const status = value.fields.status?.name || '';
+      return `${value.key}: ${summary}${status ? ` (${status})` : ''}`;
+    }
+
+    // Handle objects that contain error messages
+    if (typeof value === 'object' && value.errorMessage) {
+      return null; // Skip objects with error messages
+    }
+
+    // Handle complex objects
+    if (typeof value === 'object') {
+      // Skip objects that look like they contain system metadata
+      const systemKeys = ['self', 'id', 'iconUrl', 'avatarUrls', 'projectId'];
+      const hasOnlySystemKeys = Object.keys(value).every(key => systemKeys.includes(key));
+      
+      if (hasOnlySystemKeys) {
+        return null;
+      }
+
+      // Handle objects with key-value pairs that might be useful
+      const keys = Object.keys(value);
+      if (keys.length === 1 && (keys[0] === 'key' || keys[0] === 'name' || keys[0] === 'value')) {
+        return value[keys[0]];
+      }
+
+      // For complex objects with multiple properties, create a readable summary
+      const importantKeys = ['key', 'name', 'summary', 'status', 'value', 'displayName'];
+      const importantData: { [key: string]: any } = {};
+      
+      for (const key of importantKeys) {
+        if (value[key] !== undefined && value[key] !== null) {
+          importantData[key] = value[key];
+        }
+      }
+
+      // If we found important data, return a clean object
+      if (Object.keys(importantData).length > 0) {
+        return importantData;
+      }
+
+      // Otherwise, skip this field
+      return null;
+    }
+
+    return value;
+  }
+
   async getTicketDetails(ticketId: string): Promise<JiraTicket> {
     try {
+      // Fetch the issue with all fields
       const issue = await this.client.issues.getIssue({
         issueIdOrKey: ticketId,
+        expand: ['names', 'schema', 'operations', 'editmeta', 'changelog', 'renderedFields']
       });
 
-      return {
-        id: issue.id ?? '',
-        key: issue.key ?? '',
-        summary: issue.fields?.summary ?? '',
-        description: typeof issue.fields?.description === 'string' 
-          ? issue.fields.description 
-          : issue.fields?.description?.content ? 'Description available (complex format)' : '',
-        status: issue.fields?.status?.name ?? '',
-        assignee: issue.fields?.assignee ? {
-          displayName: issue.fields.assignee.displayName ?? '',
-          emailAddress: issue.fields.assignee.emailAddress ?? '',
-          accountId: issue.fields.assignee.accountId ?? ''
-        } : null,
-        priority: issue.fields?.priority?.name ?? '',
-        labels: issue.fields?.labels || [],
-        updated: issue.fields?.updated ?? '',
-        created: issue.fields?.created ?? ''
-      };
+      // Get field metadata for custom field name mapping
+      const allFields = await this.getAllFields();
+      
+      // Transform the fields into a flattened, user-friendly format
+      const transformedTicket = await this.transformIssueFields(issue, allFields);
+
+      return transformedTicket;
     } catch (error) {
       console.error(
         `Error fetching Jira ticket details for ${ticketId}:`,
@@ -210,7 +524,7 @@ export class JiraService {
         issueIdOrKey: ticketId,
         fields,
       });
-      console.log(`Jira ticket ${ticketId} updated successfully.`);
+      console.error(`Jira ticket ${ticketId} updated successfully.`);
     } catch (error) {
       console.error(`Error updating Jira ticket ${ticketId}:`, error);
       throw error;
@@ -223,11 +537,23 @@ export class JiraService {
   ): Promise<void> {
     try {
       const fields: { [key: string]: any } = {};
+      const allFields = await this.getAllFields();
+      const fieldMap = new Map<string, JiraField>();
+      
+      // Create a mapping from field name/ID to field metadata
+      allFields.forEach(field => {
+        fieldMap.set(field.id, field);
+        fieldMap.set(field.name, field);
+      });
 
       for (const key in payload) {
         if (Object.prototype.hasOwnProperty.call(payload, key)) {
           const fieldId = await this.getFieldId(key);
-          fields[fieldId] = payload[key];
+          const fieldMetadata = fieldMap.get(fieldId) || fieldMap.get(key);
+          const value = payload[key];
+          
+          // Transform the value based on field type
+          fields[fieldId] = this.transformValueForField(value, fieldMetadata);
         }
       }
 
@@ -235,11 +561,102 @@ export class JiraService {
         issueIdOrKey: ticketId,
         fields,
       });
-      console.log(`Jira ticket ${ticketId} custom fields updated successfully.`);
+      console.error(`Jira ticket ${ticketId} custom fields updated successfully.`);
     } catch (error) {
       console.error(`Error updating Jira ticket custom fields ${ticketId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Transform values based on field type for proper JIRA API format
+   */
+  private transformValueForField(value: any, fieldMetadata?: JiraField): any {
+    if (!fieldMetadata || !fieldMetadata.schema) {
+      return value;
+    }
+
+    const schema = fieldMetadata.schema;
+    const fieldType = schema.type;
+    const customType = schema.custom;
+
+    // Handle Sprint fields (Greenhopper/Jira Software)
+    if (customType === 'com.pyxis.greenhopper.jira:gh-sprint') {
+      if (typeof value === 'number') {
+        // Sprint ID - return as array of numbers
+        return [value];
+      } else if (typeof value === 'string') {
+        // Sprint name or ID string - try to parse as number first
+        const numValue = parseInt(value, 10);
+        if (!isNaN(numValue)) {
+          return [numValue];
+        }
+        // If not a number, it might be a sprint name - JIRA API typically expects IDs
+        // For now, return as is and let JIRA handle the validation
+        return [value];
+      } else if (Array.isArray(value)) {
+        // Already an array, return as is
+        return value;
+      }
+      return [value];
+    }
+
+    // Handle Epic Link fields
+    if (customType === 'com.pyxis.greenhopper.jira:gh-epic-link') {
+      // Epic links expect the epic key as a string
+      return String(value);
+    }
+
+    // Handle array fields
+    if (fieldType === 'array') {
+      if (!Array.isArray(value)) {
+        return [value];
+      }
+      return value;
+    }
+
+    // Handle option fields (dropdowns, selects)
+    if (fieldType === 'option') {
+      if (typeof value === 'string') {
+        return { value: value };
+      } else if (typeof value === 'object' && value.value) {
+        return value;
+      }
+      return { value: String(value) };
+    }
+
+    // Handle user fields
+    if (fieldType === 'user') {
+      if (typeof value === 'string') {
+        // Assume it's an accountId, email, or username
+        return { accountId: value };
+      }
+      return value;
+    }
+
+    // Handle number fields
+    if (fieldType === 'number') {
+      return Number(value);
+    }
+
+    // Handle date fields
+    if (fieldType === 'date') {
+      if (typeof value === 'string') {
+        return value; // Assume it's already in YYYY-MM-DD format
+      }
+      return value;
+    }
+
+    // Handle datetime fields
+    if (fieldType === 'datetime') {
+      if (typeof value === 'string') {
+        return value; // Assume it's already in ISO format
+      }
+      return value;
+    }
+
+    // For all other fields, return as is
+    return value;
   }
 
   /**
@@ -260,7 +677,7 @@ export class JiraService {
           ],
         },
       });
-      console.log(`Comment added to Jira ticket ${ticketId}.`);
+      console.error(`Comment added to Jira ticket ${ticketId}.`);
     } catch (error) {
       console.error(`Error adding comment to Jira ticket ${ticketId}:`, error);
       throw error;
@@ -271,9 +688,9 @@ export class JiraService {
     try {
       // Debug logging for development
       if (process.env.NODE_ENV === 'development') {
-        console.log('🔍 JQL Debug - Input:', jql);
-        console.log('🔍 JQL Debug - API Endpoint:', this.config.apiBaseUrl);
-        console.log('🔍 JQL Debug - Timestamp:', new Date().toISOString());
+        console.error('🔍 JQL Debug - Input:', jql);
+        console.error('🔍 JQL Debug - API Endpoint:', this.config.apiBaseUrl);
+        console.error('🔍 JQL Debug - Timestamp:', new Date().toISOString());
       }
 
       const searchResults =
@@ -284,9 +701,9 @@ export class JiraService {
 
       // Debug logging for results
       if (process.env.NODE_ENV === 'development') {
-        console.log('✅ JQL Debug - Result count:', searchResults.issues?.length || 0);
+        console.error('✅ JQL Debug - Result count:', searchResults.issues?.length || 0);
         if (searchResults.issues && searchResults.issues.length > 0) {
-          console.log('✅ JQL Debug - First result key:', searchResults.issues[0].key);
+          console.error('✅ JQL Debug - First result key:', searchResults.issues[0].key);
         }
       }
 
@@ -351,7 +768,7 @@ export class JiraService {
         }
       }
       await this.client.issues.createIssue(params);
-      console.log('Jira ticket created successfully.');
+      console.error('Jira ticket created successfully.');
     } catch (error) {
       console.error('Error creating Jira ticket:', error);
       throw error;
@@ -394,7 +811,7 @@ export class JiraService {
           id: transitionId,
         },
       });
-      console.log(
+      console.error(
         `Jira ticket ${ticketId} transitioned successfully with transition ID ${transitionId}.`,
       );
     } catch (error) {
@@ -654,8 +1071,8 @@ export class JiraService {
     
     // Debug logging for development
     if (process.env.NODE_ENV === 'development') {
-      console.log('🔍 Unified Search Debug - Generated JQL:', jql);
-      console.log('🔍 Unified Search Debug - Criteria:', JSON.stringify(criteria, null, 2));
+      console.error('🔍 Unified Search Debug - Generated JQL:', jql);
+      console.error('🔍 Unified Search Debug - Criteria:', JSON.stringify(criteria, null, 2));
     }
     
     try {
@@ -732,7 +1149,215 @@ export class JiraService {
     );
   }
 
-  // Note: Sprint and board functionality requires JIRA Agile API which might not be available
-  // in the version3 client. For now, we'll implement basic project functionality.
-  // Sprint/board features would need a separate agile client or REST API calls.
+  /**
+   * Helper method to make Agile API requests since jira.js doesn't include agile endpoints
+   */
+  private async makeAgileRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const url = `${this.config.apiBaseUrl}/rest/agile/1.0${endpoint}`;
+    const auth = btoa(`${this.config.userEmail}:${this.config.apiToken}`);
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Agile API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get all boards accessible to the user
+   */
+  async getAllBoards(options: {
+    startAt?: number;
+    maxResults?: number;
+    type?: 'scrum' | 'kanban';
+    name?: string;
+    projectKeyOrId?: string;
+  } = {}): Promise<{ values: JiraBoard[]; total: number; isLast: boolean }> {
+    try {
+      const params = new URLSearchParams();
+      if (options.startAt !== undefined) params.append('startAt', options.startAt.toString());
+      if (options.maxResults !== undefined) params.append('maxResults', options.maxResults.toString());
+      if (options.type) params.append('type', options.type);
+      if (options.name) params.append('name', options.name);
+      if (options.projectKeyOrId) params.append('projectKeyOrId', options.projectKeyOrId);
+
+      const endpoint = `/board${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.makeAgileRequest(endpoint);
+      
+      return {
+        values: result.values || [],
+        total: result.total || 0,
+        isLast: result.isLast || false
+      };
+    } catch (error) {
+      console.error('Error fetching boards:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get board details by ID
+   */
+  async getBoardById(boardId: number): Promise<JiraBoard> {
+    try {
+      return await this.makeAgileRequest(`/board/${boardId}`);
+    } catch (error) {
+      console.error(`Error fetching board ${boardId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all sprints for a board
+   */
+  async getSprintsForBoard(boardId: number, options: {
+    startAt?: number;
+    maxResults?: number;
+    state?: 'future' | 'active' | 'closed';
+  } = {}): Promise<{ values: JiraSprint[]; total: number; isLast: boolean }> {
+    try {
+      const params = new URLSearchParams();
+      if (options.startAt !== undefined) params.append('startAt', options.startAt.toString());
+      if (options.maxResults !== undefined) params.append('maxResults', options.maxResults.toString());
+      if (options.state) params.append('state', options.state);
+
+      const endpoint = `/board/${boardId}/sprint${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.makeAgileRequest(endpoint);
+      
+      return {
+        values: result.values || [],
+        total: result.total || 0,
+        isLast: result.isLast || false
+      };
+    } catch (error) {
+      console.error(`Error fetching sprints for board ${boardId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get sprint details by ID
+   */
+  async getSprintById(sprintId: number): Promise<JiraSprint> {
+    try {
+      return await this.makeAgileRequest(`/sprint/${sprintId}`);
+    } catch (error) {
+      console.error(`Error fetching sprint ${sprintId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search for sprints in a specific board by name or ID
+   */
+  async searchSprints(criteria: {
+    boardName?: string;
+    boardId?: number;
+    name?: string;
+    state?: 'future' | 'active' | 'closed';
+    maxResults?: number;
+  } = {}): Promise<JiraSprint[]> {
+    try {
+      const maxResults = criteria.maxResults || 50;
+      let targetBoardId: number;
+
+      // Determine the target board ID
+      if (criteria.boardId) {
+        targetBoardId = criteria.boardId;
+      } else if (criteria.boardName) {
+        // Search for board by name
+        const boardsResult = await this.getAllBoards({
+          name: criteria.boardName,
+          maxResults: 100
+        });
+        
+        if (boardsResult.values.length === 0) {
+          throw new Error(`No board found with name containing: ${criteria.boardName}`);
+        }
+        
+        // Use the first matching board
+        targetBoardId = boardsResult.values[0].id;
+        console.log(`Found board: ${boardsResult.values[0].name} (ID: ${targetBoardId})`);
+      } else {
+        throw new Error('Either boardName or boardId must be provided');
+      }
+
+      // Get sprints from the target board
+      const sprintResult = await this.getSprintsForBoard(targetBoardId, {
+        state: criteria.state,
+        maxResults
+      });
+      let allSprints = sprintResult.values;
+
+      // Filter by name if provided
+      if (criteria.name) {
+        const nameLower = criteria.name.toLowerCase();
+        allSprints = allSprints.filter(sprint => 
+          sprint.name.toLowerCase().includes(nameLower)
+        );
+      }
+
+      // Sort by state priority (active > future > closed) and then by name
+      allSprints.sort((a, b) => {
+        const stateOrder = { active: 1, future: 2, closed: 3 };
+        const stateComparison = stateOrder[a.state] - stateOrder[b.state];
+        if (stateComparison !== 0) return stateComparison;
+        return a.name.localeCompare(b.name);
+      });
+
+      // Apply maxResults limit
+      if (allSprints.length > maxResults) {
+        allSprints = allSprints.slice(0, maxResults);
+      }
+
+      return allSprints;
+    } catch (error) {
+      console.error('Error searching sprints:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get issues in a specific sprint
+   */
+  async getIssuesForSprint(sprintId: number, options: {
+    startAt?: number;
+    maxResults?: number;
+    jql?: string;
+    fields?: string[];
+  } = {}): Promise<JiraTicket[]> {
+    try {
+      const params = new URLSearchParams();
+      if (options.startAt !== undefined) params.append('startAt', options.startAt.toString());
+      if (options.maxResults !== undefined) params.append('maxResults', options.maxResults.toString());
+      if (options.jql) params.append('jql', options.jql);
+      if (options.fields) params.append('fields', options.fields.join(','));
+
+      const endpoint = `/sprint/${sprintId}/issue${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.makeAgileRequest(endpoint);
+      
+      // Transform the issues using existing transformation logic
+      const allFields = await this.getAllFields();
+      return await Promise.all(
+        (result.issues || []).map((issue: any) => this.transformIssueFields(issue, allFields))
+      );
+    } catch (error) {
+      console.error(`Error fetching issues for sprint ${sprintId}:`, error);
+      throw error;
+    }
+  }
+
+  // Note: Sprint and board functionality now implemented using JIRA Agile API
+  // The agile endpoints are available at /rest/agile/1.0/ and require proper permissions
+  // Sprint/board features can now be accessed through the methods above.
 }

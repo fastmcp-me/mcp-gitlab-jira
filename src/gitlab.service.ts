@@ -461,7 +461,7 @@ export class GitLabService {
       try {
         return semver.gte(release.tag_name, sinceVersion);
       } catch (error) {
-        console.warn(
+        console.error(
           `Could not parse version ${release.tag_name} or ${sinceVersion}: ${error}`,
         );
         return false;
