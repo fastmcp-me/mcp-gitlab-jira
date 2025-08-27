@@ -8,6 +8,8 @@ import {
   JiraTicketUpdatePayload,
   JiraField,
   JiraCustomFieldUpdatePayload,
+  JiraSprint,
+  JiraBoard,
 } from './jira';
 
 export class JiraService {
@@ -535,11 +537,23 @@ export class JiraService {
   ): Promise<void> {
     try {
       const fields: { [key: string]: any } = {};
+      const allFields = await this.getAllFields();
+      const fieldMap = new Map<string, JiraField>();
+      
+      // Create a mapping from field name/ID to field metadata
+      allFields.forEach(field => {
+        fieldMap.set(field.id, field);
+        fieldMap.set(field.name, field);
+      });
 
       for (const key in payload) {
         if (Object.prototype.hasOwnProperty.call(payload, key)) {
           const fieldId = await this.getFieldId(key);
-          fields[fieldId] = payload[key];
+          const fieldMetadata = fieldMap.get(fieldId) || fieldMap.get(key);
+          const value = payload[key];
+          
+          // Transform the value based on field type
+          fields[fieldId] = this.transformValueForField(value, fieldMetadata);
         }
       }
 
@@ -552,6 +566,97 @@ export class JiraService {
       console.error(`Error updating Jira ticket custom fields ${ticketId}:`, error);
       throw error;
     }
+  }
+
+  /**
+   * Transform values based on field type for proper JIRA API format
+   */
+  private transformValueForField(value: any, fieldMetadata?: JiraField): any {
+    if (!fieldMetadata || !fieldMetadata.schema) {
+      return value;
+    }
+
+    const schema = fieldMetadata.schema;
+    const fieldType = schema.type;
+    const customType = schema.custom;
+
+    // Handle Sprint fields (Greenhopper/Jira Software)
+    if (customType === 'com.pyxis.greenhopper.jira:gh-sprint') {
+      if (typeof value === 'number') {
+        // Sprint ID - return as array of numbers
+        return [value];
+      } else if (typeof value === 'string') {
+        // Sprint name or ID string - try to parse as number first
+        const numValue = parseInt(value, 10);
+        if (!isNaN(numValue)) {
+          return [numValue];
+        }
+        // If not a number, it might be a sprint name - JIRA API typically expects IDs
+        // For now, return as is and let JIRA handle the validation
+        return [value];
+      } else if (Array.isArray(value)) {
+        // Already an array, return as is
+        return value;
+      }
+      return [value];
+    }
+
+    // Handle Epic Link fields
+    if (customType === 'com.pyxis.greenhopper.jira:gh-epic-link') {
+      // Epic links expect the epic key as a string
+      return String(value);
+    }
+
+    // Handle array fields
+    if (fieldType === 'array') {
+      if (!Array.isArray(value)) {
+        return [value];
+      }
+      return value;
+    }
+
+    // Handle option fields (dropdowns, selects)
+    if (fieldType === 'option') {
+      if (typeof value === 'string') {
+        return { value: value };
+      } else if (typeof value === 'object' && value.value) {
+        return value;
+      }
+      return { value: String(value) };
+    }
+
+    // Handle user fields
+    if (fieldType === 'user') {
+      if (typeof value === 'string') {
+        // Assume it's an accountId, email, or username
+        return { accountId: value };
+      }
+      return value;
+    }
+
+    // Handle number fields
+    if (fieldType === 'number') {
+      return Number(value);
+    }
+
+    // Handle date fields
+    if (fieldType === 'date') {
+      if (typeof value === 'string') {
+        return value; // Assume it's already in YYYY-MM-DD format
+      }
+      return value;
+    }
+
+    // Handle datetime fields
+    if (fieldType === 'datetime') {
+      if (typeof value === 'string') {
+        return value; // Assume it's already in ISO format
+      }
+      return value;
+    }
+
+    // For all other fields, return as is
+    return value;
   }
 
   /**
@@ -1044,7 +1149,215 @@ export class JiraService {
     );
   }
 
-  // Note: Sprint and board functionality requires JIRA Agile API which might not be available
-  // in the version3 client. For now, we'll implement basic project functionality.
-  // Sprint/board features would need a separate agile client or REST API calls.
+  /**
+   * Helper method to make Agile API requests since jira.js doesn't include agile endpoints
+   */
+  private async makeAgileRequest(endpoint: string, options: RequestInit = {}): Promise<any> {
+    const url = `${this.config.apiBaseUrl}/rest/agile/1.0${endpoint}`;
+    const auth = btoa(`${this.config.userEmail}:${this.config.apiToken}`);
+    
+    const response = await fetch(url, {
+      ...options,
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Agile API request failed: ${response.status} ${response.statusText}`);
+    }
+
+    return response.json();
+  }
+
+  /**
+   * Get all boards accessible to the user
+   */
+  async getAllBoards(options: {
+    startAt?: number;
+    maxResults?: number;
+    type?: 'scrum' | 'kanban';
+    name?: string;
+    projectKeyOrId?: string;
+  } = {}): Promise<{ values: JiraBoard[]; total: number; isLast: boolean }> {
+    try {
+      const params = new URLSearchParams();
+      if (options.startAt !== undefined) params.append('startAt', options.startAt.toString());
+      if (options.maxResults !== undefined) params.append('maxResults', options.maxResults.toString());
+      if (options.type) params.append('type', options.type);
+      if (options.name) params.append('name', options.name);
+      if (options.projectKeyOrId) params.append('projectKeyOrId', options.projectKeyOrId);
+
+      const endpoint = `/board${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.makeAgileRequest(endpoint);
+      
+      return {
+        values: result.values || [],
+        total: result.total || 0,
+        isLast: result.isLast || false
+      };
+    } catch (error) {
+      console.error('Error fetching boards:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get board details by ID
+   */
+  async getBoardById(boardId: number): Promise<JiraBoard> {
+    try {
+      return await this.makeAgileRequest(`/board/${boardId}`);
+    } catch (error) {
+      console.error(`Error fetching board ${boardId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get all sprints for a board
+   */
+  async getSprintsForBoard(boardId: number, options: {
+    startAt?: number;
+    maxResults?: number;
+    state?: 'future' | 'active' | 'closed';
+  } = {}): Promise<{ values: JiraSprint[]; total: number; isLast: boolean }> {
+    try {
+      const params = new URLSearchParams();
+      if (options.startAt !== undefined) params.append('startAt', options.startAt.toString());
+      if (options.maxResults !== undefined) params.append('maxResults', options.maxResults.toString());
+      if (options.state) params.append('state', options.state);
+
+      const endpoint = `/board/${boardId}/sprint${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.makeAgileRequest(endpoint);
+      
+      return {
+        values: result.values || [],
+        total: result.total || 0,
+        isLast: result.isLast || false
+      };
+    } catch (error) {
+      console.error(`Error fetching sprints for board ${boardId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get sprint details by ID
+   */
+  async getSprintById(sprintId: number): Promise<JiraSprint> {
+    try {
+      return await this.makeAgileRequest(`/sprint/${sprintId}`);
+    } catch (error) {
+      console.error(`Error fetching sprint ${sprintId}:`, error);
+      throw error;
+    }
+  }
+
+  /**
+   * Search for sprints in a specific board by name or ID
+   */
+  async searchSprints(criteria: {
+    boardName?: string;
+    boardId?: number;
+    name?: string;
+    state?: 'future' | 'active' | 'closed';
+    maxResults?: number;
+  } = {}): Promise<JiraSprint[]> {
+    try {
+      const maxResults = criteria.maxResults || 50;
+      let targetBoardId: number;
+
+      // Determine the target board ID
+      if (criteria.boardId) {
+        targetBoardId = criteria.boardId;
+      } else if (criteria.boardName) {
+        // Search for board by name
+        const boardsResult = await this.getAllBoards({
+          name: criteria.boardName,
+          maxResults: 100
+        });
+        
+        if (boardsResult.values.length === 0) {
+          throw new Error(`No board found with name containing: ${criteria.boardName}`);
+        }
+        
+        // Use the first matching board
+        targetBoardId = boardsResult.values[0].id;
+        console.log(`Found board: ${boardsResult.values[0].name} (ID: ${targetBoardId})`);
+      } else {
+        throw new Error('Either boardName or boardId must be provided');
+      }
+
+      // Get sprints from the target board
+      const sprintResult = await this.getSprintsForBoard(targetBoardId, {
+        state: criteria.state,
+        maxResults
+      });
+      let allSprints = sprintResult.values;
+
+      // Filter by name if provided
+      if (criteria.name) {
+        const nameLower = criteria.name.toLowerCase();
+        allSprints = allSprints.filter(sprint => 
+          sprint.name.toLowerCase().includes(nameLower)
+        );
+      }
+
+      // Sort by state priority (active > future > closed) and then by name
+      allSprints.sort((a, b) => {
+        const stateOrder = { active: 1, future: 2, closed: 3 };
+        const stateComparison = stateOrder[a.state] - stateOrder[b.state];
+        if (stateComparison !== 0) return stateComparison;
+        return a.name.localeCompare(b.name);
+      });
+
+      // Apply maxResults limit
+      if (allSprints.length > maxResults) {
+        allSprints = allSprints.slice(0, maxResults);
+      }
+
+      return allSprints;
+    } catch (error) {
+      console.error('Error searching sprints:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Get issues in a specific sprint
+   */
+  async getIssuesForSprint(sprintId: number, options: {
+    startAt?: number;
+    maxResults?: number;
+    jql?: string;
+    fields?: string[];
+  } = {}): Promise<JiraTicket[]> {
+    try {
+      const params = new URLSearchParams();
+      if (options.startAt !== undefined) params.append('startAt', options.startAt.toString());
+      if (options.maxResults !== undefined) params.append('maxResults', options.maxResults.toString());
+      if (options.jql) params.append('jql', options.jql);
+      if (options.fields) params.append('fields', options.fields.join(','));
+
+      const endpoint = `/sprint/${sprintId}/issue${params.toString() ? '?' + params.toString() : ''}`;
+      const result = await this.makeAgileRequest(endpoint);
+      
+      // Transform the issues using existing transformation logic
+      const allFields = await this.getAllFields();
+      return await Promise.all(
+        (result.issues || []).map((issue: any) => this.transformIssueFields(issue, allFields))
+      );
+    } catch (error) {
+      console.error(`Error fetching issues for sprint ${sprintId}:`, error);
+      throw error;
+    }
+  }
+
+  // Note: Sprint and board functionality now implemented using JIRA Agile API
+  // The agile endpoints are available at /rest/agile/1.0/ and require proper permissions
+  // Sprint/board features can now be accessed through the methods above.
 }

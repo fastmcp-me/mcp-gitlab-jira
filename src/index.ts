@@ -974,6 +974,135 @@ const allTools: Tool[] = [
       required: ['projectKey'],
     },
   },
+  {
+    name: 'jira_get_all_boards',
+    description: 'Gets all Jira boards accessible to the user.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: ['scrum', 'kanban'],
+          description: 'Filter boards by type (optional).',
+        },
+        name: {
+          type: 'string',
+          description: 'Filter boards by name (optional).',
+        },
+        projectKeyOrId: {
+          type: 'string',
+          description: 'Filter boards by project key or ID (optional).',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 50).',
+        },
+      },
+    },
+  },
+  {
+    name: 'jira_get_board_details',
+    description: 'Gets details of a specific Jira board.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        boardId: {
+          type: 'number',
+          description: 'The ID of the Jira board.',
+        },
+      },
+      required: ['boardId'],
+    },
+  },
+  {
+    name: 'jira_search_sprints',
+    description: 'Searches for sprints in a specific Jira board by board name or ID.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        boardName: {
+          type: 'string',
+          description: 'Name of the board to search sprints in (case-insensitive partial match).',
+        },
+        boardId: {
+          type: 'number',
+          description: 'ID of the board to search sprints in (alternative to boardName).',
+        },
+        name: {
+          type: 'string',
+          description: 'Filter sprints by name (case-insensitive partial match).',
+        },
+        state: {
+          type: 'string',
+          enum: ['future', 'active', 'closed'],
+          description: 'Filter sprints by state.',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 50).',
+        },
+      },
+    },
+  },
+  {
+    name: 'jira_get_sprint_details',
+    description: 'Gets details of a specific sprint.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sprintId: {
+          type: 'number',
+          description: 'The ID of the sprint.',
+        },
+      },
+      required: ['sprintId'],
+    },
+  },
+  {
+    name: 'jira_get_sprints_for_board',
+    description: 'Gets all sprints for a specific board.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        boardId: {
+          type: 'number',
+          description: 'The ID of the Jira board.',
+        },
+        state: {
+          type: 'string',
+          enum: ['future', 'active', 'closed'],
+          description: 'Filter sprints by state (optional).',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 50).',
+        },
+      },
+      required: ['boardId'],
+    },
+  },
+  {
+    name: 'jira_get_sprint_issues',
+    description: 'Gets all issues in a specific sprint.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        sprintId: {
+          type: 'number',
+          description: 'The ID of the sprint.',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 50).',
+        },
+        jql: {
+          type: 'string',
+          description: 'Additional JQL filter for the issues (optional).',
+        },
+      },
+      required: ['sprintId'],
+    },
+  },
 ];
 
 // Filter tools based on service availability
@@ -1870,6 +1999,143 @@ server.setRequestHandler(
           }
           const { projectKey } = args as { projectKey: string };
           const result = await jiraService.getProjectVersions(projectKey);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_all_boards': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { type, name, projectKeyOrId, maxResults } = args as {
+            type?: 'scrum' | 'kanban';
+            name?: string;
+            projectKeyOrId?: string;
+            maxResults?: number;
+          };
+          const result = await jiraService.getAllBoards({
+            type,
+            name,
+            projectKeyOrId,
+            maxResults,
+          });
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_board_details': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { boardId } = args as { boardId: number };
+          const result = await jiraService.getBoardById(boardId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_search_sprints': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { boardName, boardId, name, state, maxResults } = args as {
+            boardName?: string;
+            boardId?: number;
+            name?: string;
+            state?: 'future' | 'active' | 'closed';
+            maxResults?: number;
+          };
+          
+          if (!boardName && !boardId) {
+            throw new Error('Either boardName or boardId must be provided.');
+          }
+          
+          const result = await jiraService.searchSprints({
+            boardName,
+            boardId,
+            name,
+            state,
+            maxResults,
+          });
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_sprint_details': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { sprintId } = args as { sprintId: number };
+          const result = await jiraService.getSprintById(sprintId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_sprints_for_board': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { boardId, state, maxResults } = args as {
+            boardId: number;
+            state?: 'future' | 'active' | 'closed';
+            maxResults?: number;
+          };
+          const result = await jiraService.getSprintsForBoard(boardId, {
+            state,
+            maxResults,
+          });
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_get_sprint_issues': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { sprintId, maxResults, jql } = args as {
+            sprintId: number;
+            maxResults?: number;
+            jql?: string;
+          };
+          const result = await jiraService.getIssuesForSprint(sprintId, {
+            maxResults,
+            jql,
+          });
           return {
             content: [
               {

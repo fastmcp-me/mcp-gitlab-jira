@@ -86,3 +86,28 @@ export interface JiraField {
     customId?: number;
   };
 }
+
+export interface JiraSprint {
+  id: number;
+  self: string;
+  state: 'future' | 'active' | 'closed';
+  name: string;
+  startDate?: string;
+  endDate?: string;
+  completeDate?: string;
+  originBoardId?: number;
+  goal?: string;
+}
+
+export interface JiraBoard {
+  id: number;
+  self: string;
+  name: string;
+  type: 'scrum' | 'kanban' | 'simple';
+  location?: {
+    displayName: string;
+    projectId: number;
+    projectKey: string;
+    projectName: string;
+  };
+}
