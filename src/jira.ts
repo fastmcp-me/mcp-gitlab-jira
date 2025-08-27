@@ -29,6 +29,8 @@ export interface JiraTicket {
     emailAddress: string;
     accountId: string;
   } | null;
+  // Allow for dynamic additional fields
+  [key: string]: any;
 }
 
 export interface JiraComment {

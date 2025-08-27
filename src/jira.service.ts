@@ -31,30 +31,274 @@ export class JiraService {
 
   
 
+  /**
+   * Transform Jira issue fields into a flattened, user-friendly format
+   */
+  private async transformIssueFields(issue: any, allFields: JiraField[]): Promise<JiraTicket> {
+    const fields = issue.fields || {};
+    const fieldMap = new Map<string, string>();
+    
+    // Create a mapping from field ID to display name
+    allFields.forEach(field => {
+      fieldMap.set(field.id, field.name);
+    });
+
+    // Start with core fields that are always present
+    const result: JiraTicket = {
+      id: issue.id ?? '',
+      key: issue.key ?? '',
+      summary: fields.summary ?? '',
+      description: this.extractDescription(fields.description),
+      status: fields.status?.name ?? '',
+      assignee: this.extractUser(fields.assignee),
+      priority: fields.priority?.name ?? '',
+      labels: fields.labels || [],
+      updated: fields.updated ?? '',
+      created: fields.created ?? '',
+      issueType: fields.issuetype?.name ?? '',
+      reporter: this.extractUser(fields.reporter)
+    };
+
+    // Add other system and custom fields
+    Object.keys(fields).forEach(fieldId => {
+      const fieldValue = fields[fieldId];
+      const fieldName = fieldMap.get(fieldId) || fieldId;
+      
+      // Skip if already handled above or if value is empty/null
+      if (this.shouldSkipField(fieldId, fieldValue)) {
+        return;
+      }
+
+      // Transform the field name to be more user-friendly
+      const friendlyFieldName = this.transformFieldName(fieldName);
+      
+      // Transform the field value to be more readable
+      const transformedValue = this.transformFieldValue(fieldValue);
+      
+      if (transformedValue !== null && transformedValue !== undefined) {
+        result[friendlyFieldName] = transformedValue;
+      }
+    });
+
+    return result;
+  }
+
+  /**
+   * Extract description from various formats
+   */
+  private extractDescription(description: any): string {
+    if (!description) return '';
+    
+    if (typeof description === 'string') {
+      return description;
+    }
+    
+    if (description.content) {
+      // Handle Atlassian Document Format (ADF)
+      return this.extractTextFromADF(description.content);
+    }
+    
+    return 'Description available (complex format)';
+  }
+
+  /**
+   * Extract text content from Atlassian Document Format
+   */
+  private extractTextFromADF(content: any[]): string {
+    if (!Array.isArray(content)) return '';
+    
+    return content
+      .map(block => {
+        if (block.type === 'paragraph' && block.content) {
+          return block.content
+            .map((item: any) => item.text || '')
+            .join('');
+        }
+        return '';
+      })
+      .filter(text => text.trim().length > 0)
+      .join('\n');
+  }
+
+  /**
+   * Extract user information from user objects
+   */
+  private extractUser(user: any): { displayName: string; emailAddress: string; accountId: string } | null {
+    if (!user) return null;
+    
+    return {
+      displayName: user.displayName ?? '',
+      emailAddress: user.emailAddress ?? '',
+      accountId: user.accountId ?? ''
+    };
+  }
+
+  /**
+   * Determine if a field should be skipped
+   */
+  private shouldSkipField(fieldId: string, fieldValue: any): boolean {
+    // Skip core fields already handled
+    const coreFields = [
+      'id', 'key', 'summary', 'description', 'status', 'assignee', 
+      'priority', 'labels', 'updated', 'created', 'issuetype', 'reporter'
+    ];
+    
+    if (coreFields.includes(fieldId)) {
+      return true;
+    }
+
+    // Skip fields that are likely not useful for AI
+    const skipFields = [
+      'attachment', 'attachments', 'thumbnail', 'avatarUrls', 'avatar',
+      'worklog', 'watches', 'votes', 'timetracking', 'aggregatetimetracking',
+      'timeestimate', 'aggregatetimeestimate', 'timeoriginalestimate',
+      'aggregatetimeoriginalestimate', 'timespent', 'aggregatetimespent',
+      'workratio', 'progress', 'aggregateprogress', 'lastViewed',
+      'comment', 'issuelinks', 'subtasks', 'versions'
+    ];
+    
+    if (skipFields.includes(fieldId)) {
+      return true;
+    }
+
+    // Skip empty values
+    if (fieldValue === null || fieldValue === undefined || fieldValue === '') {
+      return true;
+    }
+
+    // Skip empty arrays
+    if (Array.isArray(fieldValue) && fieldValue.length === 0) {
+      return true;
+    }
+
+    // Skip empty objects
+    if (typeof fieldValue === 'object' && !Array.isArray(fieldValue) && Object.keys(fieldValue).length === 0) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /**
+   * Transform field names to be more user-friendly
+   */
+  private transformFieldName(fieldName: string): string {
+    // Remove common prefixes/suffixes that are not user-friendly
+    let transformed = fieldName
+      .replace(/^(customfield_\d+|cf_)/i, '') // Remove custom field prefixes
+      .replace(/\s*\[.*\]$/, '') // Remove bracketed suffixes
+      .trim();
+
+    // Convert to camelCase if it's not already
+    if (transformed.includes(' ') || transformed.includes('_') || transformed.includes('-')) {
+      transformed = transformed
+        .toLowerCase()
+        .replace(/[^a-z0-9]+(.)/g, (_, char) => char.toUpperCase())
+        .replace(/^(.)/, (_, char) => char.toLowerCase());
+    }
+
+    // Handle some common field mappings
+    const fieldMappings: { [key: string]: string } = {
+      'storypoints': 'storyPoints',
+      'fixversion': 'fixVersions',
+      'fixversions': 'fixVersions',
+      'component': 'components',
+      'duedate': 'dueDate',
+      'resolutiondate': 'resolutionDate',
+      'lastviewed': 'lastViewed',
+      'timespent': 'timeSpent',
+      'timeestimate': 'timeEstimate',
+      'timeoriginalestimate': 'originalEstimate',
+      'issuecolor': 'issueColor',
+      'issuetype': 'issueType'
+    };
+
+    return fieldMappings[transformed.toLowerCase()] || transformed;
+  }
+
+  /**
+   * Transform field values to be more readable
+   */
+  private transformFieldValue(fieldValue: any): any {
+    if (fieldValue === null || fieldValue === undefined) {
+      return null;
+    }
+
+    // Handle arrays
+    if (Array.isArray(fieldValue)) {
+      return fieldValue
+        .map(item => this.transformSingleValue(item))
+        .filter(item => item !== null && item !== undefined);
+    }
+
+    return this.transformSingleValue(fieldValue);
+  }
+
+  /**
+   * Transform a single field value
+   */
+  private transformSingleValue(value: any): any {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    // Handle objects with name property (common in Jira)
+    if (typeof value === 'object' && value.name) {
+      return value.name;
+    }
+
+    // Handle objects with displayName property
+    if (typeof value === 'object' && value.displayName) {
+      return value.displayName;
+    }
+
+    // Handle objects with value property
+    if (typeof value === 'object' && value.value) {
+      return value.value;
+    }
+
+    // Handle user objects
+    if (typeof value === 'object' && value.accountId) {
+      return value.displayName || value.emailAddress || value.accountId;
+    }
+
+    // Handle version objects
+    if (typeof value === 'object' && value.name && value.released !== undefined) {
+      return value.name;
+    }
+
+    // Handle complex objects by stringifying them if they have useful content
+    if (typeof value === 'object') {
+      // Skip objects that look like they contain system metadata
+      const systemKeys = ['self', 'id', 'iconUrl', 'avatarUrls', 'projectId'];
+      const hasOnlySystemKeys = Object.keys(value).every(key => systemKeys.includes(key));
+      
+      if (hasOnlySystemKeys) {
+        return null;
+      }
+
+      // For other objects, return a simplified representation
+      return JSON.stringify(value);
+    }
+
+    return value;
+  }
+
   async getTicketDetails(ticketId: string): Promise<JiraTicket> {
     try {
+      // Fetch the issue with all fields
       const issue = await this.client.issues.getIssue({
         issueIdOrKey: ticketId,
+        expand: ['names', 'schema', 'operations', 'editmeta', 'changelog', 'renderedFields']
       });
 
-      return {
-        id: issue.id ?? '',
-        key: issue.key ?? '',
-        summary: issue.fields?.summary ?? '',
-        description: typeof issue.fields?.description === 'string' 
-          ? issue.fields.description 
-          : issue.fields?.description?.content ? 'Description available (complex format)' : '',
-        status: issue.fields?.status?.name ?? '',
-        assignee: issue.fields?.assignee ? {
-          displayName: issue.fields.assignee.displayName ?? '',
-          emailAddress: issue.fields.assignee.emailAddress ?? '',
-          accountId: issue.fields.assignee.accountId ?? ''
-        } : null,
-        priority: issue.fields?.priority?.name ?? '',
-        labels: issue.fields?.labels || [],
-        updated: issue.fields?.updated ?? '',
-        created: issue.fields?.created ?? ''
-      };
+      // Get field metadata for custom field name mapping
+      const allFields = await this.getAllFields();
+      
+      // Transform the fields into a flattened, user-friendly format
+      const transformedTicket = await this.transformIssueFields(issue, allFields);
+
+      return transformedTicket;
     } catch (error) {
       console.error(
         `Error fetching Jira ticket details for ${ticketId}:`,
@@ -107,9 +351,9 @@ export class JiraService {
           field.name
             ?.toLowerCase()
             .trim()
-            .replaceAll(' ', '')
-            .replaceAll('_', '')
-            .replaceAll('-', '') === 'storypoints',
+            .replace(/\s/g, '')
+            .replace(/_/g, '')
+            .replace(/-/g, '') === 'storypoints',
       );
 
       if (!storyPointsField || !storyPointsField.id) {
