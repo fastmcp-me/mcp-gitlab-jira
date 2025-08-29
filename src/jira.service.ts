@@ -12,6 +12,14 @@ import {
   JiraBoard,
 } from './jira';
 
+// Types for Atlassian Document Format (ADF)
+interface ADFNode {
+  type: string;
+  text?: string;
+  content?: ADFNode[];
+  attrs?: Record<string, unknown>;
+}
+
 export class JiraService {
   private client: Version3Client;
   private config: JiraConfig;
@@ -104,22 +112,139 @@ export class JiraService {
   }
 
   /**
-   * Extract text content from Atlassian Document Format
+   * Extract text content from Atlassian Document Format - Enhanced version
    */
-  private extractTextFromADF(content: any[]): string {
+  private extractTextFromADF(content: ADFNode[]): string {
     if (!Array.isArray(content)) return '';
     
-    return content
-      .map(block => {
-        if (block.type === 'paragraph' && block.content) {
-          return block.content
-            .map((item: any) => item.text || '')
-            .join('');
-        }
-        return '';
-      })
-      .filter(text => text.trim().length > 0)
-      .join('\n');
+    const extractTextFromNode = (node: ADFNode): string => {
+      if (!node) return '';
+      
+      // Handle text nodes
+      if (node.type === 'text') {
+        return node.text || '';
+      }
+      
+      // Handle paragraph blocks
+      if (node.type === 'paragraph' && node.content) {
+        return node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+      }
+      
+      // Handle heading blocks
+      if (node.type === 'heading' && node.content) {
+        const headingText = node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+        return headingText ? `${headingText}` : '';
+      }
+      
+      // Handle list items
+      if (node.type === 'listItem' && node.content) {
+        return node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+      }
+      
+      // Handle bullet/ordered lists
+      if ((node.type === 'bulletList' || node.type === 'orderedList') && node.content) {
+        return node.content
+          .map((item: ADFNode) => '• ' + extractTextFromNode(item))
+          .join('\n');
+      }
+      
+      // Handle code blocks
+      if (node.type === 'codeBlock' && node.content) {
+        const code = node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+        return code ? `\`\`\`\n${code}\n\`\`\`` : '';
+      }
+      
+      // Handle inline code
+      if (node.type === 'code' && node.content) {
+        const code = node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+        return code ? `\`${code}\`` : '';
+      }
+      
+      // Handle blockquotes
+      if (node.type === 'blockquote' && node.content) {
+        const quote = node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+        return quote ? `> ${quote}` : '';
+      }
+      
+      // Handle tables
+      if (node.type === 'table' && node.content) {
+        return node.content
+          .map((row: ADFNode) => {
+            if (row.type === 'tableRow' && row.content) {
+              return row.content
+                .map((cell: ADFNode) => {
+                  if (cell.type === 'tableCell' && cell.content) {
+                    return cell.content
+                      .map((item: ADFNode) => extractTextFromNode(item))
+                      .join('');
+                  }
+                  return '';
+                })
+                .join(' | ');
+            }
+            return '';
+          })
+          .filter((text: string) => text.trim().length > 0)
+          .join('\n');
+      }
+      
+      // Handle hard breaks
+      if (node.type === 'hardBreak') {
+        return '\n';
+      }
+      
+      // Handle mentions
+      if (node.type === 'mention' && node.attrs) {
+        return `@${(node.attrs.text as string) || (node.attrs.displayName as string) || 'user'}`;
+      }
+      
+      // Handle media/images
+      if (node.type === 'media' && node.attrs) {
+        return `[Image: ${(node.attrs.alt as string) || 'attachment'}]`;
+      }
+      
+      // Handle links
+      if (node.type === 'link' && node.content) {
+        const linkText = node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+        return linkText;
+      }
+      
+      // Recursively handle any node with content
+      if (node.content && Array.isArray(node.content)) {
+        return node.content
+          .map((item: ADFNode) => extractTextFromNode(item))
+          .join('');
+      }
+      
+      // For unknown node types, try to extract any text property
+      if (node.text) {
+        return node.text;
+      }
+      
+      return '';
+    };
+    
+    // Process all top-level content blocks
+    const extractedBlocks = content
+      .map(block => extractTextFromNode(block))
+      .filter(text => text.trim().length > 0);
+    
+    // Join blocks with double newlines to preserve paragraph structure
+    return extractedBlocks.join('\n\n');
   }
 
   /**
