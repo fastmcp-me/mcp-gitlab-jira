@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.9] - 2025-09-05
+
+### Added
+
+- **JIRA Ticket Update Tools** - Three new tools for updating specific ticket fields:
+  - `jira_update_ticket_story_point` - Update story points for tickets
+  - `jira_update_ticket_priority` - Update priority with fuzzy matching for priority names
+  - `jira_update_ticket_sprint` - Update sprint assignment with dynamic sprint discovery and fuzzy matching
+
+### Enhanced
+
+- Dynamic sprint discovery with automatic board detection based on ticket's project
+- Fuzzy matching for sprint names using Levenshtein distance algorithm
+- Automatic pagination handling for Jira Agile API responses
+- Manual board filtering using `board.location.projectKey` (API query parameters don't work reliably)
+- Comprehensive sprint and board discovery with fallback mechanisms
+
 ## [0.1.8] - 2025-08-29
 
 ### Fixed
