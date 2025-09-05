@@ -214,10 +214,13 @@ This runs a new container for each MCP session:
 - `jira_get_available_transitions`: Fetches available transitions for a Jira ticket.
 - `jira_update_ticket`: Updates a Jira ticket summary, description, labels.
 - `jira_update_custom_fields`: Updates custom fields on a Jira ticket.
+- `jira_update_ticket_priority`: Updates the priority value for a Jira ticket. Automatically finds the priority custom field (case-insensitive search for "Priority" or "priority"), fetches the allowed values for that field, and matches the provided priority name using fuzzy string matching. Accepts values like "Critical", "High", "Medium", "Low", etc., and will find the best match from the predefined options.
+- `jira_update_ticket_sprint`: Updates the sprint value for a Jira ticket. Automatically finds the sprint custom field (case-insensitive search for "Sprint" or "sprint"), fetches available sprints from the project's boards, and matches the provided sprint name using fuzzy string matching. Accepts values like "Sprint 1", "Bug Fix Sprint", etc., and will find the best match from active and future sprints in the project.
 - `jira_transition_ticket`: Transitions a Jira ticket to a new status.
 - `jira_get_all_fields`: Fetches the list of all fields from Jira.
 
 #### Jira Project Management Tools
+
 - `jira_get_all_projects`: Gets all accessible Jira projects.
 - `jira_get_project_details`: Gets detailed information about a specific Jira project.
 - `jira_get_project_components`: Gets components for a Jira project.

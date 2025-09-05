@@ -440,6 +440,64 @@ const allTools: Tool[] = [
     },
   },
   {
+    name: 'jira_update_ticket_story_point',
+    description: 'Updates the story points value for a Jira ticket. Automatically finds the story points custom field (case-insensitive search for "story points", "story_points", etc.).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID or key of the Jira ticket to update.',
+        },
+        storyPoints: {
+          type: 'number',
+          description: 'The story points value to set (e.g., 1, 2, 3, 5, 8, 13, etc.).',
+        },
+      },
+      required: ['ticketId', 'storyPoints'],
+    },
+  },
+  {
+    name: 'jira_update_ticket_priority',
+    description: 'Updates the priority value for a Jira ticket. Automatically finds the priority custom field (case-insensitive search for "Priority" or "priority"), fetches the allowed values for that field, and matches the provided priority name using fuzzy string matching. Accepts values like "Critical", "High", "Medium", "Low", etc., and will find the best match from the predefined options.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID or key of the Jira ticket to update.',
+        },
+        priority: {
+          type: 'string',
+          description: 'The priority value to set (e.g., "Critical", "High", "Medium", "Low", "Highest", etc.).',
+        },
+      },
+      required: ['ticketId', 'priority'],
+    },
+  },
+  {
+    name: 'jira_update_ticket_sprint',
+    description: 'Updates the sprint assignment for a Jira ticket. Automatically finds the sprint custom field, fetches available sprints from the ticket\'s project boards, and matches the provided sprint name using fuzzy string matching. Accepts sprint names and will find the best match from available sprints.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ticketId: {
+          type: 'string',
+          description: 'The ID or key of the Jira ticket to update.',
+        },
+        sprintName: {
+          type: 'string',
+          description: 'The sprint name to assign (e.g., "Sprint 1", "Release Sprint", "Bug Fix Sprint", etc.).',
+        },
+        boardId: {
+          type: 'number',
+          description: 'Optional: Specific board ID to fetch sprints from. If not provided, will search all boards associated with the ticket\'s project.',
+        },
+      },
+      required: ['ticketId', 'sprintName'],
+    },
+  },
+  {
     name: 'jira_transition_ticket',
     description: 'Transitions a Jira ticket to a new status by name.',
     inputSchema: {
@@ -988,15 +1046,7 @@ const allTools: Tool[] = [
         name: {
           type: 'string',
           description: 'Filter boards by name (optional).',
-        },
-        projectKeyOrId: {
-          type: 'string',
-          description: 'Filter boards by project key or ID (optional).',
-        },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of results to return (default: 50).',
-        },
+        }
       },
     },
   },
@@ -1012,6 +1062,36 @@ const allTools: Tool[] = [
         },
       },
       required: ['boardId'],
+    },
+  },
+  {
+    name: 'jira_find_boards',
+    description: 'Finds and validates Jira boards using various criteria. Helpful for identifying the correct board ID when board discovery is not working as expected.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        projectKey: {
+          type: 'string',
+          description: 'Filter boards by project key (optional).',
+        },
+        boardName: {
+          type: 'string',
+          description: 'Filter boards by name (partial match, optional).',
+        },
+        boardId: {
+          type: 'number',
+          description: 'Get details of a specific board ID (optional).',
+        },
+        type: {
+          type: 'string',
+          enum: ['scrum', 'kanban'],
+          description: 'Filter boards by type (optional).',
+        },
+        maxResults: {
+          type: 'number',
+          description: 'Maximum number of results to return (default: 50).',
+        },
+      },
     },
   },
   {
@@ -1072,11 +1152,7 @@ const allTools: Tool[] = [
           type: 'string',
           enum: ['future', 'active', 'closed'],
           description: 'Filter sprints by state (optional).',
-        },
-        maxResults: {
-          type: 'number',
-          description: 'Maximum number of results to return (default: 50).',
-        },
+        }
       },
       required: ['boardId'],
     },
@@ -1532,6 +1608,64 @@ server.setRequestHandler(
               {
                 type: 'text',
                 text: `Custom fields for ticket ${ticketId} updated successfully.`,
+              },
+            ],
+          };
+        }
+
+        case 'jira_update_ticket_story_point': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { ticketId, storyPoints } = args as {
+            ticketId: string;
+            storyPoints: number;
+          };
+          await jiraService.updateTicketStoryPoints(ticketId, storyPoints);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Story points for ticket ${ticketId} updated to ${storyPoints} successfully.`,
+              },
+            ],
+          };
+        }
+
+        case 'jira_update_ticket_priority': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { ticketId, priority } = args as {
+            ticketId: string;
+            priority: string;
+          };
+          await jiraService.updateTicketPriority(ticketId, priority);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Priority for ticket ${ticketId} updated to ${priority} successfully.`,
+              },
+            ],
+          };
+        }
+
+        case 'jira_update_ticket_sprint': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { ticketId, sprintName, boardId } = args as {
+            ticketId: string;
+            sprintName: string;
+            boardId?: number;
+          };
+          await jiraService.updateTicketSprint(ticketId, sprintName, boardId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Sprint for ticket ${ticketId} updated to ${sprintName} successfully.`,
               },
             ],
           };
@@ -2013,7 +2147,7 @@ server.setRequestHandler(
           if (!jiraService) {
             throw new Error('Jira service is not initialized.');
           }
-          const { type, name, projectKeyOrId, maxResults } = args as {
+          const { type, name } = args as {
             type?: 'scrum' | 'kanban';
             name?: string;
             projectKeyOrId?: string;
@@ -2022,8 +2156,6 @@ server.setRequestHandler(
           const result = await jiraService.getAllBoards({
             type,
             name,
-            projectKeyOrId,
-            maxResults,
           });
           return {
             content: [
@@ -2041,6 +2173,34 @@ server.setRequestHandler(
           }
           const { boardId } = args as { boardId: number };
           const result = await jiraService.getBoardById(boardId);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(result, null, 2),
+              },
+            ],
+          };
+        }
+
+        case 'jira_find_boards': {
+          if (!jiraService) {
+            throw new Error('Jira service is not initialized.');
+          }
+          const { projectKey, boardName, boardId, type, maxResults } = args as {
+            projectKey?: string;
+            boardName?: string;
+            boardId?: number;
+            type?: 'scrum' | 'kanban';
+            maxResults?: number;
+          };
+          const result = await jiraService.findBoards({
+            projectKey,
+            boardName,
+            boardId,
+            type,
+            maxResults,
+          });
           return {
             content: [
               {
@@ -2104,14 +2264,13 @@ server.setRequestHandler(
           if (!jiraService) {
             throw new Error('Jira service is not initialized.');
           }
-          const { boardId, state, maxResults } = args as {
+          const { boardId, state } = args as {
             boardId: number;
             state?: 'future' | 'active' | 'closed';
             maxResults?: number;
           };
           const result = await jiraService.getSprintsForBoard(boardId, {
             state,
-            maxResults,
           });
           return {
             content: [
